@@ -1,17 +1,16 @@
 <template>
 <div class="container">
-    <ul v-if="posts && posts.length">
-        <li v-for="post of posts">
-          <p><strong>{{post.title.rendered}}</strong></p>
-          <p>{{post.body}}</p>
-        </li>
-      </ul>
+    <div class="tile is-ancestor" v-if="posts && posts.length">
+        <div class="tile is-4 is-vertical is-parent" v-for="post of posts">
+            <div class="tile is-child box">
+                <p><strong>{{post.title.rendered}}</strong></p>
+                <p>{{post.body}}</p>
 
-      <ul v-if="errors && errors.length">
-        <li v-for="error of errors">
-          {{error.message}}
-        </li>
-      </ul>
+            </div>
+        </div>
+      </div>
+  </div>
+
 </div>
 </template>
 
@@ -26,7 +25,7 @@ export default {
 
   // Fetches posts when the component is created.
   created() {
-    axios.get(`/wp-json/wp/v2/posts?per_page=6`)
+    axios.get(`/wp-json/wp/v2/posts?per_page=8`)
     .then(response => {
       // JSON responses are automatically parsed.
       this.posts = response.data
@@ -35,14 +34,6 @@ export default {
       this.errors.push(e)
     })
 
-    // async / await version (created() becomes async created())
-    //
-    // try {
-    //   const response = await axios.get(`http://jsonplaceholder.typicode.com/posts`)
-    //   this.posts = response.data
-    // } catch (e) {
-    //   this.errors.push(e)
-    // }
   }
 }
 </script>

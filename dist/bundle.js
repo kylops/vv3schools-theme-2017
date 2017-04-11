@@ -14048,90 +14048,50 @@ exports.default = {};
 
 
 Object.defineProperty(exports, "__esModule", {
-    value: true
+  value: true
 });
 // <template lang="html">
-//     <div class="tile is-ancestor">
-//         <div class="tile is-vertical is-8">
-//             <div class="tile">
-//                 <div class="tile is-parent is-vertical">
-//                 <article class="tile is-child notification is-primary">
-//                   <p class="title">Vertical...</p>
-//                   <p class="subtitle">Top tile</p>
-//                 </article>
-//                 <article class="tile is-child notification is-warning">
-//                   <p class="title">...tiles</p>
-//                   <p class="subtitle">Bottom tile</p>
-//                 </article>
+//     <div class="container">
+//         <div class="tile is-ancestor" v-if="posts && posts.length">
+//             <div class="tile is-4 is-vertical is-parent" v-for="post of posts">
+//                 <div class="tile is-child box">
+//                     <p><strong>{{post.title.rendered}}</strong></p>
+//                     <p>{{post.body}}</p>
+//
 //                 </div>
-//               <div class="tile is-parent">
-//                 <article class="tile is-child notification is-info">
-//                   <p class="title">Middle tile</p>
-//                   <p class="subtitle">With an image</p>
-//                   <figure class="image is-4by3">
-//                     <img src="http://bulma.io/images/placeholders/640x480.png">
-//                   </figure>
-//                 </article>
-//               </div>
 //             </div>
-//             <div class="tile is-parent">
-//               <article class="tile is-child notification is-danger">
-//                 <p class="title">Wide tile</p>
-//                 <p class="subtitle">Aligned with the right tile</p>
-//                 <div class="content">
-//                   <!-- Content -->
-//                 </div>
-//               </article>
-//             </div>
-//         </div>
-//         <div class="tile is-parent">
-//             <article class="tile is-child notification is-success">
-//                 <div class="content">
-//                     <p class="title">Tall tile</p>
-//                     <p class="subtitle">With even more content</p>
-//                     <div class="content">
-//                     <!-- Content -->
-//                     </div>
-//                 </div>
-//             </article>
-//         </div>
+//           </div>
+//       </div>
+//
 //     </div>
 // </template>
 //
 // <script>
-exports.default = {}
-// data(){
-//     return{
-//         posts: []
-//     }
-// },
-// mounted : function(){
-//   this.getPosts();
-// },
-//
-// methods: {
-//
-//     getPosts(){
-//       axios.get('/wp-json/wp/v2/posts?per_page=5')
-//         .then(function (response) {
-//           this.posts =  response.data;
-//           console.log(this.posts);
-//
-//         })
-//         .catch(function (error) {
-//           console.log(error);
-//         });
-//     },
-//
-//
-// }
 
+exports.default = {
+  data: function data() {
+    return {
+      posts: [],
+      errors: []
+    };
+  },
+
+  // Fetches posts when the component is created.
+  created: function created() {
+    var _this = this;
+
+    axios.get("/wp-json/wp/v2/posts?per_page=2").then(function (response) {
+      return console.log(_this.posts = response.data);
+    }).catch(function (e) {
+      _this.errors.push(e);
+    });
+  }
+};
 // </script>
 //
 // <style lang="css">
 // </style>
 //
-;
 
 /***/ }),
 /* 39 */
@@ -14162,39 +14122,29 @@ exports.default = {
   created: function created() {
     var _this = this;
 
-    _axios2.default.get('/wp-json/wp/v2/posts?per_page=6').then(function (response) {
+    _axios2.default.get('/wp-json/wp/v2/posts?per_page=8').then(function (response) {
       // JSON responses are automatically parsed.
       _this.posts = response.data;
     }).catch(function (e) {
       _this.errors.push(e);
     });
-
-    // async / await version (created() becomes async created())
-    //
-    // try {
-    //   const response = await axios.get(`http://jsonplaceholder.typicode.com/posts`)
-    //   this.posts = response.data
-    // } catch (e) {
-    //   this.errors.push(e)
-    // }
   }
 };
 // </script>
 //
 // <template>
 // <div class="container">
-//     <ul v-if="posts && posts.length">
-//         <li v-for="post of posts">
-//           <p><strong>{{post.title.rendered}}</strong></p>
-//           <p>{{post.body}}</p>
-//         </li>
-//       </ul>
+//     <div class="tile is-ancestor" v-if="posts && posts.length">
+//         <div class="tile is-4 is-vertical is-parent" v-for="post of posts">
+//             <div class="tile is-child box">
+//                 <p><strong>{{post.title.rendered}}</strong></p>
+//                 <p>{{post.body}}</p>
 //
-//       <ul v-if="errors && errors.length">
-//         <li v-for="error of errors">
-//           {{error.message}}
-//         </li>
-//       </ul>
+//             </div>
+//         </div>
+//       </div>
+//   </div>
+//
 // </div>
 // </template>
 //
@@ -16404,13 +16354,13 @@ module.exports = "\n    <nav class=\"nav\">\n    <div class=\"nav-left\">\n     
 /* 50 */
 /***/ (function(module, exports) {
 
-module.exports = "\n    <div class=\"tile is-ancestor\">\n        <div class=\"tile is-vertical is-8\">\n            <div class=\"tile\">\n                <div class=\"tile is-parent is-vertical\">\n                <article class=\"tile is-child notification is-primary\">\n                  <p class=\"title\">Vertical...</p>\n                  <p class=\"subtitle\">Top tile</p>\n                </article>\n                <article class=\"tile is-child notification is-warning\">\n                  <p class=\"title\">...tiles</p>\n                  <p class=\"subtitle\">Bottom tile</p>\n                </article>\n                </div>\n              <div class=\"tile is-parent\">\n                <article class=\"tile is-child notification is-info\">\n                  <p class=\"title\">Middle tile</p>\n                  <p class=\"subtitle\">With an image</p>\n                  <figure class=\"image is-4by3\">\n                    <img src=\"http://bulma.io/images/placeholders/640x480.png\">\n                  </figure>\n                </article>\n              </div>\n            </div>\n            <div class=\"tile is-parent\">\n              <article class=\"tile is-child notification is-danger\">\n                <p class=\"title\">Wide tile</p>\n                <p class=\"subtitle\">Aligned with the right tile</p>\n                <div class=\"content\">\n                  <!-- Content -->\n                </div>\n              </article>\n            </div>\n        </div>\n        <div class=\"tile is-parent\">\n            <article class=\"tile is-child notification is-success\">\n                <div class=\"content\">\n                    <p class=\"title\">Tall tile</p>\n                    <p class=\"subtitle\">With even more content</p>\n                    <div class=\"content\">\n                    <!-- Content -->\n                    </div>\n                </div>\n            </article>\n        </div>\n    </div>\n";
+module.exports = "\n    <div class=\"container\">\n        <div class=\"tile is-ancestor\" v-if=\"posts && posts.length\">\n            <div class=\"tile is-4 is-vertical is-parent\" v-for=\"post of posts\">\n                <div class=\"tile is-child box\">\n                    <p><strong>{{post.title.rendered}}</strong></p>\n                    <p>{{post.body}}</p>\n\n                </div>\n            </div>\n          </div>\n      </div>\n\n    </div>\n";
 
 /***/ }),
 /* 51 */
 /***/ (function(module, exports) {
 
-module.exports = "\n<div class=\"container\">\n    <ul v-if=\"posts && posts.length\">\n        <li v-for=\"post of posts\">\n          <p><strong>{{post.title.rendered}}</strong></p>\n          <p>{{post.body}}</p>\n        </li>\n      </ul>\n\n      <ul v-if=\"errors && errors.length\">\n        <li v-for=\"error of errors\">\n          {{error.message}}\n        </li>\n      </ul>\n</div>\n";
+module.exports = "\n<div class=\"container\">\n    <div class=\"tile is-ancestor\" v-if=\"posts && posts.length\">\n        <div class=\"tile is-4 is-vertical is-parent\" v-for=\"post of posts\">\n            <div class=\"tile is-child box\">\n                <p><strong>{{post.title.rendered}}</strong></p>\n                <p>{{post.body}}</p>\n\n            </div>\n        </div>\n      </div>\n  </div>\n\n</div>\n";
 
 /***/ })
 /******/ ]);

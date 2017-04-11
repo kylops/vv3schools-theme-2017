@@ -1,5 +1,7 @@
-body {
-  background-color: red; }
+@import url(https://fonts.googleapis.com/css?family=Raleway);html, body {
+  background-color: #f5f8fa;
+  color: #636b6f;
+  font-family: "Raleway", sans-serif !important; }
 /*! bulma.io v0.4.0 | MIT License | github.com/jgthms/bulma */
 @keyframes spinAround {
   from {

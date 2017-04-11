@@ -1,5 +1,8 @@
 @import 'colors';
+@import 'fonts';
 
-body{
-    background-color: red;
+html, body{
+    background-color: $background-color;
+    color: $text-color;
+    font-family: $font-railway !important;
 }
