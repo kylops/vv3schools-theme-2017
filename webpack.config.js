@@ -12,7 +12,7 @@ var extractPlugin = new ExtractTextPlugin({
 module.exports = {
     entry: {
         // 'app': glob.sync('./assets/js/*.js'),
-        'app': path.join(__dirname, 'assets', 'js', 'app.js'),
+        'main': path.join(__dirname, 'assets', 'js', 'main.js'),
 
 
     },
