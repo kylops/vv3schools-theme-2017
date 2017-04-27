@@ -1,4 +1,48 @@
-@import url(https://fonts.googleapis.com/css?family=Raleway);html, body {
+@import url(https://fonts.googleapis.com/css?family=Raleway);@import url(https://fonts.googleapis.com/css?family=Gloria+Hallelujah);html, body {
   background-color: #f5f8fa;
   color: #636b6f;
-  font-family: "Raleway", sans-serif !important; }
+  font-family: "Raleway", sans-serif; }
+
+.title {
+  color: white;
+  font-family: "Gloria Hallelujah", cursive !important; }
+
+.head-icon {
+  padding: 0;
+  text-align: center;
+  position: absolute; }
+  .head-icon .head-icon-img-div {
+    position: relative;
+    width: 9em;
+    height: 9em;
+    padding: 0;
+    border-radius: 10em;
+    margin: 0 auto;
+    overflow: hidden;
+    background-color: transparent;
+    /*box-shadow: 0 0 0 5px rgba(50,50,50,0.125);*/
+    box-shadow: 0 19px 38px rgba(0, 0, 0, 0.3), 0 15px 12px rgba(0, 0, 0, 0.22);
+    -webkit-background-clip: padding-box;
+    background-clip: padding-box;
+    transition: 0.25s; }
+    .head-icon .head-icon-img-div:hover, .head-icon .head-icon-img-div:focus {
+      box-shadow: 0 3px 6px rgba(0, 0, 0, 0.16), 0 3px 6px rgba(0, 0, 0, 0.23); }
+    .head-icon .head-icon-img-div .head-icon-a {
+      width: 100%;
+      height: 100%;
+      text-align: center; }
+      .head-icon .head-icon-img-div .head-icon-a .head-icon-img {
+        position: absolute;
+        width: 9em;
+        height: 9em;
+        background-size: cover;
+        background-repeat: no-repeat;
+        background-blend-mode: hard-light;
+        background-position: 50%;
+        background-size: 110%;
+        -webkit-background-clip: padding-box;
+        background-clip: padding-box;
+        transition: 0.5s; }
+        .head-icon .head-icon-img-div .head-icon-a .head-icon-img:hover, .head-icon .head-icon-img-div .head-icon-a .head-icon-img:focus {
+          background-color: rgba(80, 118, 196, 0.5);
+          transition: 0.5s; }

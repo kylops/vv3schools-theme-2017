@@ -11,17 +11,7 @@ get_header();
 ?>
 <div class="uk-container-expand">
    <div id="app">
-      <!-- <site-header></site-header> -->
-      <div id="main" class="site-main" role="main">
-        <!-- route outlet -->
-        <!-- component matched by the route will render here -->
-        <site-nav></site-nav>
-        <transition>
-          <keep-alive>
-            <router-view></router-view>
-          </keep-alive>
-        </transition>
-     </div>
+   </div>
 
       <!-- <site-footer></site-footer> -->
    </div><!-- #app -->

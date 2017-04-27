@@ -19,7 +19,7 @@ let siteInfoStorage = {
 }
 
 const state = {
-    siteInfo : '',
+    // siteInfo : '',
     allPosts  : '',
     // allPages : '',
     // allCategories : '',
@@ -27,9 +27,9 @@ const state = {
 }
 
 const getters = {
-    getSiteInfo(state){
-      return siteInfoStorage.fetch().siteInfo ? siteInfoStorage.fetch().siteInfo : state.siteInfo;
-    },
+    // getSiteInfo(state){
+    //   return siteInfoStorage.fetch().siteInfo ? siteInfoStorage.fetch().siteInfo : state.siteInfo;
+    // },
     getAllPosts(state){
         return state.allPosts;
     },
@@ -47,15 +47,15 @@ const getters = {
 }
 
 const mutations = {
-    updateSiteInfo(state, info){
-        state.siteInfo = info;
-        let siteInfo = siteInfoStorage.fetch();
-        let now  = +new Date;
-        let one_day = 1000*60*60*24;
-        if( (now - siteInfo.last_updated) > one_day ){
-          siteInfoStorage.save('siteInfo',info);
-        }
-    },
+    // updateSiteInfo(state, info){
+    //     state.siteInfo = info;
+    //     let siteInfo = siteInfoStorage.fetch();
+    //     let now  = +new Date;
+    //     let one_day = 1000*60*60*24;
+    //     if( (now - siteInfo.last_updated) > one_day ){
+    //       siteInfoStorage.save('siteInfo',info);
+    //     }
+    // },
     // updateAllPages(state, pages){
     //     state.allPages = pages;
     // },
@@ -71,16 +71,16 @@ const mutations = {
 }
 
 const actions = {
-    fetchSiteInfo({commit}){
-        let siteInfo = axios.get('/wp-json/vv3/v1/info')
-            .then(function (response) {
-                commit('updateSiteInfo', response.data)
-                return response.data;
-            })
-            .catch(function (error) {
-                console.log(error);
-            });
-    },
+    // fetchSiteInfo({commit}){
+    //     let siteInfo = axios.get('/wp-json/vv3/v1/info')
+    //         .then(function (response) {
+    //             commit('updateSiteInfo', response.data)
+    //             return response.data;
+    //         })
+    //         .catch(function (error) {
+    //             console.log(error);
+    //         });
+    // },
     // fetchAllPages({commit}){
     //     let pages = axios.get('/wp-json/wp/v2/pages?per_page=100')
     //         .then(function (response) {
@@ -91,7 +91,7 @@ const actions = {
     //         });
     // },
     fetchAllPosts({commit, state}){
-        let posts = axios.get('/wp-json/wp/v2/posts?per_page=100')
+        let posts = axios.get('/wp-json/wp/v2/posts?per_page=20')
             .then(function (response) {
                 commit('updateAllPosts', response.data)  ;
             })

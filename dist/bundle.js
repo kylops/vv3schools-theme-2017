@@ -63,7 +63,7 @@
 /******/ 	__webpack_require__.p = "";
 /******/
 /******/ 	// Load entry module and return exports
-/******/ 	return __webpack_require__(__webpack_require__.s = 40);
+/******/ 	return __webpack_require__(__webpack_require__.s = 43);
 /******/ })
 /************************************************************************/
 /******/ ([
@@ -73,7 +73,7 @@
 "use strict";
 
 
-var bind = __webpack_require__(9);
+var bind = __webpack_require__(11);
 
 /*global toString:true*/
 
@@ -378,17 +378,395 @@ module.exports = {
 /* 1 */
 /***/ (function(module, exports, __webpack_require__) {
 
-module.exports = __webpack_require__(23);
+/* WEBPACK VAR INJECTION */(function(Buffer) {/*
+	MIT License http://www.opensource.org/licenses/mit-license.php
+	Author Tobias Koppers @sokra
+*/
+// css base code, injected by the css-loader
+module.exports = function(useSourceMap) {
+	var list = [];
+
+	// return the list of modules as css string
+	list.toString = function toString() {
+		return this.map(function (item) {
+			var content = cssWithMappingToString(item, useSourceMap);
+			if(item[2]) {
+				return "@media " + item[2] + "{" + content + "}";
+			} else {
+				return content;
+			}
+		}).join("");
+	};
+
+	// import a list of modules into the list
+	list.i = function(modules, mediaQuery) {
+		if(typeof modules === "string")
+			modules = [[null, modules, ""]];
+		var alreadyImportedModules = {};
+		for(var i = 0; i < this.length; i++) {
+			var id = this[i][0];
+			if(typeof id === "number")
+				alreadyImportedModules[id] = true;
+		}
+		for(i = 0; i < modules.length; i++) {
+			var item = modules[i];
+			// skip already imported module
+			// this implementation is not 100% perfect for weird media query combinations
+			//  when a module is imported multiple times with different media queries.
+			//  I hope this will never occur (Hey this way we have smaller bundles)
+			if(typeof item[0] !== "number" || !alreadyImportedModules[item[0]]) {
+				if(mediaQuery && !item[2]) {
+					item[2] = mediaQuery;
+				} else if(mediaQuery) {
+					item[2] = "(" + item[2] + ") and (" + mediaQuery + ")";
+				}
+				list.push(item);
+			}
+		}
+	};
+	return list;
+};
+
+function cssWithMappingToString(item, useSourceMap) {
+	var content = item[1] || '';
+	var cssMapping = item[3];
+	if (!cssMapping) {
+		return content;
+	}
+
+	if (useSourceMap) {
+		var sourceMapping = toComment(cssMapping);
+		var sourceURLs = cssMapping.sources.map(function (source) {
+			return '/*# sourceURL=' + cssMapping.sourceRoot + source + ' */'
+		});
+
+		return [content].concat(sourceURLs).concat([sourceMapping]).join('\n');
+	}
+
+	return [content].join('\n');
+}
+
+// Adapted from convert-source-map (MIT)
+function toComment(sourceMap) {
+  var base64 = new Buffer(JSON.stringify(sourceMap)).toString('base64');
+  var data = 'sourceMappingURL=data:application/json;charset=utf-8;base64,' + base64;
+
+  return '/*# ' + data + ' */';
+}
+
+/* WEBPACK VAR INJECTION */}.call(exports, __webpack_require__(52).Buffer))
 
 /***/ }),
 /* 2 */
+/***/ (function(module, exports, __webpack_require__) {
+
+/*
+	MIT License http://www.opensource.org/licenses/mit-license.php
+	Author Tobias Koppers @sokra
+*/
+var stylesInDom = {},
+	memoize = function(fn) {
+		var memo;
+		return function () {
+			if (typeof memo === "undefined") memo = fn.apply(this, arguments);
+			return memo;
+		};
+	},
+	isOldIE = memoize(function() {
+		// Test for IE <= 9 as proposed by Browserhacks
+		// @see http://browserhacks.com/#hack-e71d8692f65334173fee715c222cb805
+		// Tests for existence of standard globals is to allow style-loader 
+		// to operate correctly into non-standard environments
+		// @see https://github.com/webpack-contrib/style-loader/issues/177
+		return window && document && document.all && !window.atob;
+	}),
+	getElement = (function(fn) {
+		var memo = {};
+		return function(selector) {
+			if (typeof memo[selector] === "undefined") {
+				memo[selector] = fn.call(this, selector);
+			}
+			return memo[selector]
+		};
+	})(function (styleTarget) {
+		return document.querySelector(styleTarget)
+	}),
+	singletonElement = null,
+	singletonCounter = 0,
+	styleElementsInsertedAtTop = [],
+	fixUrls = __webpack_require__(63);
+
+module.exports = function(list, options) {
+	if(typeof DEBUG !== "undefined" && DEBUG) {
+		if(typeof document !== "object") throw new Error("The style-loader cannot be used in a non-browser environment");
+	}
+
+	options = options || {};
+	options.attrs = typeof options.attrs === "object" ? options.attrs : {};
+
+	// Force single-tag solution on IE6-9, which has a hard limit on the # of <style>
+	// tags it will allow on a page
+	if (typeof options.singleton === "undefined") options.singleton = isOldIE();
+
+	// By default, add <style> tags to the <head> element
+	if (typeof options.insertInto === "undefined") options.insertInto = "head";
+
+	// By default, add <style> tags to the bottom of the target
+	if (typeof options.insertAt === "undefined") options.insertAt = "bottom";
+
+	var styles = listToStyles(list);
+	addStylesToDom(styles, options);
+
+	return function update(newList) {
+		var mayRemove = [];
+		for(var i = 0; i < styles.length; i++) {
+			var item = styles[i];
+			var domStyle = stylesInDom[item.id];
+			domStyle.refs--;
+			mayRemove.push(domStyle);
+		}
+		if(newList) {
+			var newStyles = listToStyles(newList);
+			addStylesToDom(newStyles, options);
+		}
+		for(var i = 0; i < mayRemove.length; i++) {
+			var domStyle = mayRemove[i];
+			if(domStyle.refs === 0) {
+				for(var j = 0; j < domStyle.parts.length; j++)
+					domStyle.parts[j]();
+				delete stylesInDom[domStyle.id];
+			}
+		}
+	};
+};
+
+function addStylesToDom(styles, options) {
+	for(var i = 0; i < styles.length; i++) {
+		var item = styles[i];
+		var domStyle = stylesInDom[item.id];
+		if(domStyle) {
+			domStyle.refs++;
+			for(var j = 0; j < domStyle.parts.length; j++) {
+				domStyle.parts[j](item.parts[j]);
+			}
+			for(; j < item.parts.length; j++) {
+				domStyle.parts.push(addStyle(item.parts[j], options));
+			}
+		} else {
+			var parts = [];
+			for(var j = 0; j < item.parts.length; j++) {
+				parts.push(addStyle(item.parts[j], options));
+			}
+			stylesInDom[item.id] = {id: item.id, refs: 1, parts: parts};
+		}
+	}
+}
+
+function listToStyles(list) {
+	var styles = [];
+	var newStyles = {};
+	for(var i = 0; i < list.length; i++) {
+		var item = list[i];
+		var id = item[0];
+		var css = item[1];
+		var media = item[2];
+		var sourceMap = item[3];
+		var part = {css: css, media: media, sourceMap: sourceMap};
+		if(!newStyles[id])
+			styles.push(newStyles[id] = {id: id, parts: [part]});
+		else
+			newStyles[id].parts.push(part);
+	}
+	return styles;
+}
+
+function insertStyleElement(options, styleElement) {
+	var styleTarget = getElement(options.insertInto)
+	if (!styleTarget) {
+		throw new Error("Couldn't find a style target. This probably means that the value for the 'insertInto' parameter is invalid.");
+	}
+	var lastStyleElementInsertedAtTop = styleElementsInsertedAtTop[styleElementsInsertedAtTop.length - 1];
+	if (options.insertAt === "top") {
+		if(!lastStyleElementInsertedAtTop) {
+			styleTarget.insertBefore(styleElement, styleTarget.firstChild);
+		} else if(lastStyleElementInsertedAtTop.nextSibling) {
+			styleTarget.insertBefore(styleElement, lastStyleElementInsertedAtTop.nextSibling);
+		} else {
+			styleTarget.appendChild(styleElement);
+		}
+		styleElementsInsertedAtTop.push(styleElement);
+	} else if (options.insertAt === "bottom") {
+		styleTarget.appendChild(styleElement);
+	} else {
+		throw new Error("Invalid value for parameter 'insertAt'. Must be 'top' or 'bottom'.");
+	}
+}
+
+function removeStyleElement(styleElement) {
+	styleElement.parentNode.removeChild(styleElement);
+	var idx = styleElementsInsertedAtTop.indexOf(styleElement);
+	if(idx >= 0) {
+		styleElementsInsertedAtTop.splice(idx, 1);
+	}
+}
+
+function createStyleElement(options) {
+	var styleElement = document.createElement("style");
+	options.attrs.type = "text/css";
+
+	attachTagAttrs(styleElement, options.attrs);
+	insertStyleElement(options, styleElement);
+	return styleElement;
+}
+
+function createLinkElement(options) {
+	var linkElement = document.createElement("link");
+	options.attrs.type = "text/css";
+	options.attrs.rel = "stylesheet";
+
+	attachTagAttrs(linkElement, options.attrs);
+	insertStyleElement(options, linkElement);
+	return linkElement;
+}
+
+function attachTagAttrs(element, attrs) {
+	Object.keys(attrs).forEach(function (key) {
+		element.setAttribute(key, attrs[key]);
+	});
+}
+
+function addStyle(obj, options) {
+	var styleElement, update, remove;
+
+	if (options.singleton) {
+		var styleIndex = singletonCounter++;
+		styleElement = singletonElement || (singletonElement = createStyleElement(options));
+		update = applyToSingletonTag.bind(null, styleElement, styleIndex, false);
+		remove = applyToSingletonTag.bind(null, styleElement, styleIndex, true);
+	} else if(obj.sourceMap &&
+		typeof URL === "function" &&
+		typeof URL.createObjectURL === "function" &&
+		typeof URL.revokeObjectURL === "function" &&
+		typeof Blob === "function" &&
+		typeof btoa === "function") {
+		styleElement = createLinkElement(options);
+		update = updateLink.bind(null, styleElement, options);
+		remove = function() {
+			removeStyleElement(styleElement);
+			if(styleElement.href)
+				URL.revokeObjectURL(styleElement.href);
+		};
+	} else {
+		styleElement = createStyleElement(options);
+		update = applyToTag.bind(null, styleElement);
+		remove = function() {
+			removeStyleElement(styleElement);
+		};
+	}
+
+	update(obj);
+
+	return function updateStyle(newObj) {
+		if(newObj) {
+			if(newObj.css === obj.css && newObj.media === obj.media && newObj.sourceMap === obj.sourceMap)
+				return;
+			update(obj = newObj);
+		} else {
+			remove();
+		}
+	};
+}
+
+var replaceText = (function () {
+	var textStore = [];
+
+	return function (index, replacement) {
+		textStore[index] = replacement;
+		return textStore.filter(Boolean).join('\n');
+	};
+})();
+
+function applyToSingletonTag(styleElement, index, remove, obj) {
+	var css = remove ? "" : obj.css;
+
+	if (styleElement.styleSheet) {
+		styleElement.styleSheet.cssText = replaceText(index, css);
+	} else {
+		var cssNode = document.createTextNode(css);
+		var childNodes = styleElement.childNodes;
+		if (childNodes[index]) styleElement.removeChild(childNodes[index]);
+		if (childNodes.length) {
+			styleElement.insertBefore(cssNode, childNodes[index]);
+		} else {
+			styleElement.appendChild(cssNode);
+		}
+	}
+}
+
+function applyToTag(styleElement, obj) {
+	var css = obj.css;
+	var media = obj.media;
+
+	if(media) {
+		styleElement.setAttribute("media", media)
+	}
+
+	if(styleElement.styleSheet) {
+		styleElement.styleSheet.cssText = css;
+	} else {
+		while(styleElement.firstChild) {
+			styleElement.removeChild(styleElement.firstChild);
+		}
+		styleElement.appendChild(document.createTextNode(css));
+	}
+}
+
+function updateLink(linkElement, options, obj) {
+	var css = obj.css;
+	var sourceMap = obj.sourceMap;
+
+	/* If convertToAbsoluteUrls isn't defined, but sourcemaps are enabled
+	and there is no publicPath defined then lets turn convertToAbsoluteUrls
+	on by default.  Otherwise default to the convertToAbsoluteUrls option
+	directly
+	*/
+	var autoFixUrls = options.convertToAbsoluteUrls === undefined && sourceMap;
+
+	if (options.convertToAbsoluteUrls || autoFixUrls){
+		css = fixUrls(css);
+	}
+
+	if(sourceMap) {
+		// http://stackoverflow.com/a/26603875
+		css += "\n/*# sourceMappingURL=data:application/json;base64," + btoa(unescape(encodeURIComponent(JSON.stringify(sourceMap)))) + " */";
+	}
+
+	var blob = new Blob([css], { type: "text/css" });
+
+	var oldSrc = linkElement.href;
+
+	linkElement.href = URL.createObjectURL(blob);
+
+	if(oldSrc)
+		URL.revokeObjectURL(oldSrc);
+}
+
+
+/***/ }),
+/* 3 */
+/***/ (function(module, exports, __webpack_require__) {
+
+module.exports = __webpack_require__(26);
+
+/***/ }),
+/* 4 */
 /***/ (function(module, exports, __webpack_require__) {
 
 "use strict";
 /* WEBPACK VAR INJECTION */(function(process) {
 
 var utils = __webpack_require__(0);
-var normalizeHeaderName = __webpack_require__(37);
+var normalizeHeaderName = __webpack_require__(40);
 
 var DEFAULT_CONTENT_TYPE = {
   'Content-Type': 'application/x-www-form-urlencoded'
@@ -404,10 +782,10 @@ function getDefaultAdapter() {
   var adapter;
   if (typeof XMLHttpRequest !== 'undefined') {
     // For browsers use XHR adapter
-    adapter = __webpack_require__(5);
+    adapter = __webpack_require__(7);
   } else if (typeof process !== 'undefined') {
     // For node use HTTP adapter
-    adapter = __webpack_require__(5);
+    adapter = __webpack_require__(7);
   }
   return adapter;
 }
@@ -477,10 +855,10 @@ utils.forEach(['post', 'put', 'patch'], function forEachMethodWithData(method) {
 
 module.exports = defaults;
 
-/* WEBPACK VAR INJECTION */}.call(exports, __webpack_require__(3)))
+/* WEBPACK VAR INJECTION */}.call(exports, __webpack_require__(5)))
 
 /***/ }),
-/* 3 */
+/* 5 */
 /***/ (function(module, exports) {
 
 // shim for using process in browser
@@ -666,7 +1044,7 @@ process.umask = function() { return 0; };
 
 
 /***/ }),
-/* 4 */
+/* 6 */
 /***/ (function(module, exports, __webpack_require__) {
 
 /* WEBPACK VAR INJECTION */(function(global) {/*!
@@ -9989,19 +10367,19 @@ return Vue$3;
 /* WEBPACK VAR INJECTION */}.call(exports, __webpack_require__(12)))
 
 /***/ }),
-/* 5 */
+/* 7 */
 /***/ (function(module, exports, __webpack_require__) {
 
 "use strict";
 /* WEBPACK VAR INJECTION */(function(process) {
 
 var utils = __webpack_require__(0);
-var settle = __webpack_require__(29);
-var buildURL = __webpack_require__(32);
-var parseHeaders = __webpack_require__(38);
-var isURLSameOrigin = __webpack_require__(36);
-var createError = __webpack_require__(8);
-var btoa = (typeof window !== 'undefined' && window.btoa && window.btoa.bind(window)) || __webpack_require__(31);
+var settle = __webpack_require__(32);
+var buildURL = __webpack_require__(35);
+var parseHeaders = __webpack_require__(41);
+var isURLSameOrigin = __webpack_require__(39);
+var createError = __webpack_require__(10);
+var btoa = (typeof window !== 'undefined' && window.btoa && window.btoa.bind(window)) || __webpack_require__(34);
 
 module.exports = function xhrAdapter(config) {
   return new Promise(function dispatchXhrRequest(resolve, reject) {
@@ -10097,7 +10475,7 @@ module.exports = function xhrAdapter(config) {
     // This is only done if running in a standard browser environment.
     // Specifically not if we're in a web worker, or react-native.
     if (utils.isStandardBrowserEnv()) {
-      var cookies = __webpack_require__(34);
+      var cookies = __webpack_require__(37);
 
       // Add xsrf header
       var xsrfValue = (config.withCredentials || isURLSameOrigin(config.url)) && config.xsrfCookieName ?
@@ -10173,10 +10551,10 @@ module.exports = function xhrAdapter(config) {
   });
 };
 
-/* WEBPACK VAR INJECTION */}.call(exports, __webpack_require__(3)))
+/* WEBPACK VAR INJECTION */}.call(exports, __webpack_require__(5)))
 
 /***/ }),
-/* 6 */
+/* 8 */
 /***/ (function(module, exports, __webpack_require__) {
 
 "use strict";
@@ -10202,7 +10580,7 @@ module.exports = Cancel;
 
 
 /***/ }),
-/* 7 */
+/* 9 */
 /***/ (function(module, exports, __webpack_require__) {
 
 "use strict";
@@ -10214,13 +10592,13 @@ module.exports = function isCancel(value) {
 
 
 /***/ }),
-/* 8 */
+/* 10 */
 /***/ (function(module, exports, __webpack_require__) {
 
 "use strict";
 
 
-var enhanceError = __webpack_require__(28);
+var enhanceError = __webpack_require__(31);
 
 /**
  * Create an Error with the specified message, config, error code, and response.
@@ -10238,7 +10616,7 @@ module.exports = function createError(message, config, code, response) {
 
 
 /***/ }),
-/* 9 */
+/* 11 */
 /***/ (function(module, exports, __webpack_require__) {
 
 "use strict";
@@ -10253,384 +10631,6 @@ module.exports = function bind(fn, thisArg) {
     return fn.apply(thisArg, args);
   };
 };
-
-
-/***/ }),
-/* 10 */
-/***/ (function(module, exports, __webpack_require__) {
-
-/* WEBPACK VAR INJECTION */(function(Buffer) {/*
-	MIT License http://www.opensource.org/licenses/mit-license.php
-	Author Tobias Koppers @sokra
-*/
-// css base code, injected by the css-loader
-module.exports = function(useSourceMap) {
-	var list = [];
-
-	// return the list of modules as css string
-	list.toString = function toString() {
-		return this.map(function (item) {
-			var content = cssWithMappingToString(item, useSourceMap);
-			if(item[2]) {
-				return "@media " + item[2] + "{" + content + "}";
-			} else {
-				return content;
-			}
-		}).join("");
-	};
-
-	// import a list of modules into the list
-	list.i = function(modules, mediaQuery) {
-		if(typeof modules === "string")
-			modules = [[null, modules, ""]];
-		var alreadyImportedModules = {};
-		for(var i = 0; i < this.length; i++) {
-			var id = this[i][0];
-			if(typeof id === "number")
-				alreadyImportedModules[id] = true;
-		}
-		for(i = 0; i < modules.length; i++) {
-			var item = modules[i];
-			// skip already imported module
-			// this implementation is not 100% perfect for weird media query combinations
-			//  when a module is imported multiple times with different media queries.
-			//  I hope this will never occur (Hey this way we have smaller bundles)
-			if(typeof item[0] !== "number" || !alreadyImportedModules[item[0]]) {
-				if(mediaQuery && !item[2]) {
-					item[2] = mediaQuery;
-				} else if(mediaQuery) {
-					item[2] = "(" + item[2] + ") and (" + mediaQuery + ")";
-				}
-				list.push(item);
-			}
-		}
-	};
-	return list;
-};
-
-function cssWithMappingToString(item, useSourceMap) {
-	var content = item[1] || '';
-	var cssMapping = item[3];
-	if (!cssMapping) {
-		return content;
-	}
-
-	if (useSourceMap) {
-		var sourceMapping = toComment(cssMapping);
-		var sourceURLs = cssMapping.sources.map(function (source) {
-			return '/*# sourceURL=' + cssMapping.sourceRoot + source + ' */'
-		});
-
-		return [content].concat(sourceURLs).concat([sourceMapping]).join('\n');
-	}
-
-	return [content].join('\n');
-}
-
-// Adapted from convert-source-map (MIT)
-function toComment(sourceMap) {
-  var base64 = new Buffer(JSON.stringify(sourceMap)).toString('base64');
-  var data = 'sourceMappingURL=data:application/json;charset=utf-8;base64,' + base64;
-
-  return '/*# ' + data + ' */';
-}
-
-/* WEBPACK VAR INJECTION */}.call(exports, __webpack_require__(44).Buffer))
-
-/***/ }),
-/* 11 */
-/***/ (function(module, exports, __webpack_require__) {
-
-/*
-	MIT License http://www.opensource.org/licenses/mit-license.php
-	Author Tobias Koppers @sokra
-*/
-var stylesInDom = {},
-	memoize = function(fn) {
-		var memo;
-		return function () {
-			if (typeof memo === "undefined") memo = fn.apply(this, arguments);
-			return memo;
-		};
-	},
-	isOldIE = memoize(function() {
-		// Test for IE <= 9 as proposed by Browserhacks
-		// @see http://browserhacks.com/#hack-e71d8692f65334173fee715c222cb805
-		// Tests for existence of standard globals is to allow style-loader 
-		// to operate correctly into non-standard environments
-		// @see https://github.com/webpack-contrib/style-loader/issues/177
-		return window && document && document.all && !window.atob;
-	}),
-	getElement = (function(fn) {
-		var memo = {};
-		return function(selector) {
-			if (typeof memo[selector] === "undefined") {
-				memo[selector] = fn.call(this, selector);
-			}
-			return memo[selector]
-		};
-	})(function (styleTarget) {
-		return document.querySelector(styleTarget)
-	}),
-	singletonElement = null,
-	singletonCounter = 0,
-	styleElementsInsertedAtTop = [],
-	fixUrls = __webpack_require__(50);
-
-module.exports = function(list, options) {
-	if(typeof DEBUG !== "undefined" && DEBUG) {
-		if(typeof document !== "object") throw new Error("The style-loader cannot be used in a non-browser environment");
-	}
-
-	options = options || {};
-	options.attrs = typeof options.attrs === "object" ? options.attrs : {};
-
-	// Force single-tag solution on IE6-9, which has a hard limit on the # of <style>
-	// tags it will allow on a page
-	if (typeof options.singleton === "undefined") options.singleton = isOldIE();
-
-	// By default, add <style> tags to the <head> element
-	if (typeof options.insertInto === "undefined") options.insertInto = "head";
-
-	// By default, add <style> tags to the bottom of the target
-	if (typeof options.insertAt === "undefined") options.insertAt = "bottom";
-
-	var styles = listToStyles(list);
-	addStylesToDom(styles, options);
-
-	return function update(newList) {
-		var mayRemove = [];
-		for(var i = 0; i < styles.length; i++) {
-			var item = styles[i];
-			var domStyle = stylesInDom[item.id];
-			domStyle.refs--;
-			mayRemove.push(domStyle);
-		}
-		if(newList) {
-			var newStyles = listToStyles(newList);
-			addStylesToDom(newStyles, options);
-		}
-		for(var i = 0; i < mayRemove.length; i++) {
-			var domStyle = mayRemove[i];
-			if(domStyle.refs === 0) {
-				for(var j = 0; j < domStyle.parts.length; j++)
-					domStyle.parts[j]();
-				delete stylesInDom[domStyle.id];
-			}
-		}
-	};
-};
-
-function addStylesToDom(styles, options) {
-	for(var i = 0; i < styles.length; i++) {
-		var item = styles[i];
-		var domStyle = stylesInDom[item.id];
-		if(domStyle) {
-			domStyle.refs++;
-			for(var j = 0; j < domStyle.parts.length; j++) {
-				domStyle.parts[j](item.parts[j]);
-			}
-			for(; j < item.parts.length; j++) {
-				domStyle.parts.push(addStyle(item.parts[j], options));
-			}
-		} else {
-			var parts = [];
-			for(var j = 0; j < item.parts.length; j++) {
-				parts.push(addStyle(item.parts[j], options));
-			}
-			stylesInDom[item.id] = {id: item.id, refs: 1, parts: parts};
-		}
-	}
-}
-
-function listToStyles(list) {
-	var styles = [];
-	var newStyles = {};
-	for(var i = 0; i < list.length; i++) {
-		var item = list[i];
-		var id = item[0];
-		var css = item[1];
-		var media = item[2];
-		var sourceMap = item[3];
-		var part = {css: css, media: media, sourceMap: sourceMap};
-		if(!newStyles[id])
-			styles.push(newStyles[id] = {id: id, parts: [part]});
-		else
-			newStyles[id].parts.push(part);
-	}
-	return styles;
-}
-
-function insertStyleElement(options, styleElement) {
-	var styleTarget = getElement(options.insertInto)
-	if (!styleTarget) {
-		throw new Error("Couldn't find a style target. This probably means that the value for the 'insertInto' parameter is invalid.");
-	}
-	var lastStyleElementInsertedAtTop = styleElementsInsertedAtTop[styleElementsInsertedAtTop.length - 1];
-	if (options.insertAt === "top") {
-		if(!lastStyleElementInsertedAtTop) {
-			styleTarget.insertBefore(styleElement, styleTarget.firstChild);
-		} else if(lastStyleElementInsertedAtTop.nextSibling) {
-			styleTarget.insertBefore(styleElement, lastStyleElementInsertedAtTop.nextSibling);
-		} else {
-			styleTarget.appendChild(styleElement);
-		}
-		styleElementsInsertedAtTop.push(styleElement);
-	} else if (options.insertAt === "bottom") {
-		styleTarget.appendChild(styleElement);
-	} else {
-		throw new Error("Invalid value for parameter 'insertAt'. Must be 'top' or 'bottom'.");
-	}
-}
-
-function removeStyleElement(styleElement) {
-	styleElement.parentNode.removeChild(styleElement);
-	var idx = styleElementsInsertedAtTop.indexOf(styleElement);
-	if(idx >= 0) {
-		styleElementsInsertedAtTop.splice(idx, 1);
-	}
-}
-
-function createStyleElement(options) {
-	var styleElement = document.createElement("style");
-	options.attrs.type = "text/css";
-
-	attachTagAttrs(styleElement, options.attrs);
-	insertStyleElement(options, styleElement);
-	return styleElement;
-}
-
-function createLinkElement(options) {
-	var linkElement = document.createElement("link");
-	options.attrs.type = "text/css";
-	options.attrs.rel = "stylesheet";
-
-	attachTagAttrs(linkElement, options.attrs);
-	insertStyleElement(options, linkElement);
-	return linkElement;
-}
-
-function attachTagAttrs(element, attrs) {
-	Object.keys(attrs).forEach(function (key) {
-		element.setAttribute(key, attrs[key]);
-	});
-}
-
-function addStyle(obj, options) {
-	var styleElement, update, remove;
-
-	if (options.singleton) {
-		var styleIndex = singletonCounter++;
-		styleElement = singletonElement || (singletonElement = createStyleElement(options));
-		update = applyToSingletonTag.bind(null, styleElement, styleIndex, false);
-		remove = applyToSingletonTag.bind(null, styleElement, styleIndex, true);
-	} else if(obj.sourceMap &&
-		typeof URL === "function" &&
-		typeof URL.createObjectURL === "function" &&
-		typeof URL.revokeObjectURL === "function" &&
-		typeof Blob === "function" &&
-		typeof btoa === "function") {
-		styleElement = createLinkElement(options);
-		update = updateLink.bind(null, styleElement, options);
-		remove = function() {
-			removeStyleElement(styleElement);
-			if(styleElement.href)
-				URL.revokeObjectURL(styleElement.href);
-		};
-	} else {
-		styleElement = createStyleElement(options);
-		update = applyToTag.bind(null, styleElement);
-		remove = function() {
-			removeStyleElement(styleElement);
-		};
-	}
-
-	update(obj);
-
-	return function updateStyle(newObj) {
-		if(newObj) {
-			if(newObj.css === obj.css && newObj.media === obj.media && newObj.sourceMap === obj.sourceMap)
-				return;
-			update(obj = newObj);
-		} else {
-			remove();
-		}
-	};
-}
-
-var replaceText = (function () {
-	var textStore = [];
-
-	return function (index, replacement) {
-		textStore[index] = replacement;
-		return textStore.filter(Boolean).join('\n');
-	};
-})();
-
-function applyToSingletonTag(styleElement, index, remove, obj) {
-	var css = remove ? "" : obj.css;
-
-	if (styleElement.styleSheet) {
-		styleElement.styleSheet.cssText = replaceText(index, css);
-	} else {
-		var cssNode = document.createTextNode(css);
-		var childNodes = styleElement.childNodes;
-		if (childNodes[index]) styleElement.removeChild(childNodes[index]);
-		if (childNodes.length) {
-			styleElement.insertBefore(cssNode, childNodes[index]);
-		} else {
-			styleElement.appendChild(cssNode);
-		}
-	}
-}
-
-function applyToTag(styleElement, obj) {
-	var css = obj.css;
-	var media = obj.media;
-
-	if(media) {
-		styleElement.setAttribute("media", media)
-	}
-
-	if(styleElement.styleSheet) {
-		styleElement.styleSheet.cssText = css;
-	} else {
-		while(styleElement.firstChild) {
-			styleElement.removeChild(styleElement.firstChild);
-		}
-		styleElement.appendChild(document.createTextNode(css));
-	}
-}
-
-function updateLink(linkElement, options, obj) {
-	var css = obj.css;
-	var sourceMap = obj.sourceMap;
-
-	/* If convertToAbsoluteUrls isn't defined, but sourcemaps are enabled
-	and there is no publicPath defined then lets turn convertToAbsoluteUrls
-	on by default.  Otherwise default to the convertToAbsoluteUrls option
-	directly
-	*/
-	var autoFixUrls = options.convertToAbsoluteUrls === undefined && sourceMap;
-
-	if (options.convertToAbsoluteUrls || autoFixUrls){
-		css = fixUrls(css);
-	}
-
-	if(sourceMap) {
-		// http://stackoverflow.com/a/26603875
-		css += "\n/*# sourceMappingURL=data:application/json;base64," + btoa(unescape(encodeURIComponent(JSON.stringify(sourceMap)))) + " */";
-	}
-
-	var blob = new Blob([css], { type: "text/css" });
-
-	var oldSrc = linkElement.href;
-
-	linkElement.href = URL.createObjectURL(blob);
-
-	if(oldSrc)
-		URL.revokeObjectURL(oldSrc);
-}
 
 
 /***/ }),
@@ -10671,11 +10671,11 @@ Object.defineProperty(exports, "__esModule", {
     value: true
 });
 
-var _vue = __webpack_require__(4);
+var _vue = __webpack_require__(6);
 
 var _vue2 = _interopRequireDefault(_vue);
 
-var _Vuex = __webpack_require__(22);
+var _Vuex = __webpack_require__(25);
 
 var _Vuex2 = _interopRequireDefault(_Vuex);
 
@@ -10699,30 +10699,29 @@ var siteInfoStorage = {
 };
 
 var state = {
-    siteInfo: '',
+    // siteInfo : '',
     allPosts: ''
 };
 
 var getters = {
-    getSiteInfo: function getSiteInfo(state) {
-        return siteInfoStorage.fetch().siteInfo ? siteInfoStorage.fetch().siteInfo : state.siteInfo;
-    },
+    // getSiteInfo(state){
+    //   return siteInfoStorage.fetch().siteInfo ? siteInfoStorage.fetch().siteInfo : state.siteInfo;
+    // },
     getAllPosts: function getAllPosts(state) {
         return state.allPosts;
     }
 };
 
 var mutations = {
-    updateSiteInfo: function updateSiteInfo(state, info) {
-        state.siteInfo = info;
-        var siteInfo = siteInfoStorage.fetch();
-        var now = +new Date();
-        var one_day = 1000 * 60 * 60 * 24;
-        if (now - siteInfo.last_updated > one_day) {
-            siteInfoStorage.save('siteInfo', info);
-        }
-    },
-
+    // updateSiteInfo(state, info){
+    //     state.siteInfo = info;
+    //     let siteInfo = siteInfoStorage.fetch();
+    //     let now  = +new Date;
+    //     let one_day = 1000*60*60*24;
+    //     if( (now - siteInfo.last_updated) > one_day ){
+    //       siteInfoStorage.save('siteInfo',info);
+    //     }
+    // },
     // updateAllPages(state, pages){
     //     state.allPages = pages;
     // },
@@ -10732,17 +10731,16 @@ var mutations = {
 };
 
 var actions = {
-    fetchSiteInfo: function fetchSiteInfo(_ref) {
-        var commit = _ref.commit;
-
-        var siteInfo = axios.get('/wp-json/vv3/v1/info').then(function (response) {
-            commit('updateSiteInfo', response.data);
-            return response.data;
-        }).catch(function (error) {
-            console.log(error);
-        });
-    },
-
+    // fetchSiteInfo({commit}){
+    //     let siteInfo = axios.get('/wp-json/vv3/v1/info')
+    //         .then(function (response) {
+    //             commit('updateSiteInfo', response.data)
+    //             return response.data;
+    //         })
+    //         .catch(function (error) {
+    //             console.log(error);
+    //         });
+    // },
     // fetchAllPages({commit}){
     //     let pages = axios.get('/wp-json/wp/v2/pages?per_page=100')
     //         .then(function (response) {
@@ -10752,11 +10750,11 @@ var actions = {
     //             console.log(error);
     //         });
     // },
-    fetchAllPosts: function fetchAllPosts(_ref2) {
-        var commit = _ref2.commit,
-            state = _ref2.state;
+    fetchAllPosts: function fetchAllPosts(_ref) {
+        var commit = _ref.commit,
+            state = _ref.state;
 
-        var posts = axios.get('/wp-json/wp/v2/posts?per_page=100').then(function (response) {
+        var posts = axios.get('/wp-json/wp/v2/posts?per_page=20').then(function (response) {
             commit('updateAllPosts', response.data);
         }).catch(function (error) {
             console.log(error);
@@ -11051,7 +11049,7 @@ return plugin;
 /*! UIkit 3.0.0-beta.21 | http://www.getuikit.com | (c) 2014 - 2017 YOOtheme | MIT License */
 
 (function (global, factory) {
-     true ? module.exports = factory(__webpack_require__(49)) :
+     true ? module.exports = factory(__webpack_require__(62)) :
     typeof define === 'function' && define.amd ? define('uikit', ['jquery'], factory) :
     (global.UIkit = factory(global.jQuery));
 }(this, (function ($) { 'use strict';
@@ -17883,9 +17881,32 @@ return UIkit;
 /***/ (function(module, exports, __webpack_require__) {
 
 var __vue_script__, __vue_template__
-__webpack_require__(52)
-__vue_script__ = __webpack_require__(41)
-__vue_template__ = __webpack_require__(53)
+__webpack_require__(70)
+__vue_script__ = __webpack_require__(44)
+__vue_template__ = __webpack_require__(77)
+module.exports = __vue_script__ || {}
+if (module.exports.__esModule) module.exports = module.exports.default
+if (__vue_template__) { (typeof module.exports === "function" ? module.exports.options : module.exports).template = __vue_template__ }
+if (false) {(function () {  module.hot.accept()
+  var hotAPI = require("vue-hot-reload-api")
+  hotAPI.install(require("vue"), true)
+  if (!hotAPI.compatible) return
+  var id = "/Users/Kyle/Sites/vv3schools/wp-content/themes/vv3schools-theme-2017/assets/js/App.vue"
+  if (!module.hot.data) {
+    hotAPI.createRecord(id, module.exports)
+  } else {
+    hotAPI.update(id, module.exports, __vue_template__)
+  }
+})()}
+
+/***/ }),
+/* 18 */
+/***/ (function(module, exports, __webpack_require__) {
+
+var __vue_script__, __vue_template__
+__webpack_require__(69)
+__vue_script__ = __webpack_require__(45)
+__vue_template__ = __webpack_require__(71)
 module.exports = __vue_script__ || {}
 if (module.exports.__esModule) module.exports = module.exports.default
 if (__vue_template__) { (typeof module.exports === "function" ? module.exports.options : module.exports).template = __vue_template__ }
@@ -17902,33 +17923,105 @@ if (false) {(function () {  module.hot.accept()
 })()}
 
 /***/ }),
-/* 18 */
-/***/ (function(module, exports) {
-
-var __vue_script__, __vue_template__
-module.exports = __vue_script__ || {}
-if (module.exports.__esModule) module.exports = module.exports.default
-if (__vue_template__) { (typeof module.exports === "function" ? module.exports.options : module.exports).template = __vue_template__ }
-
-
-/***/ }),
 /* 19 */
-/***/ (function(module, exports) {
+/***/ (function(module, exports, __webpack_require__) {
 
 var __vue_script__, __vue_template__
+__webpack_require__(67)
+__vue_script__ = __webpack_require__(46)
+__vue_template__ = __webpack_require__(72)
 module.exports = __vue_script__ || {}
 if (module.exports.__esModule) module.exports = module.exports.default
 if (__vue_template__) { (typeof module.exports === "function" ? module.exports.options : module.exports).template = __vue_template__ }
-
+if (false) {(function () {  module.hot.accept()
+  var hotAPI = require("vue-hot-reload-api")
+  hotAPI.install(require("vue"), true)
+  if (!hotAPI.compatible) return
+  var id = "/Users/Kyle/Sites/vv3schools/wp-content/themes/vv3schools-theme-2017/assets/js/components/Welcome.vue"
+  if (!module.hot.data) {
+    hotAPI.createRecord(id, module.exports)
+  } else {
+    hotAPI.update(id, module.exports, __vue_template__)
+  }
+})()}
 
 /***/ }),
 /* 20 */
 /***/ (function(module, exports, __webpack_require__) {
 
 var __vue_script__, __vue_template__
-__webpack_require__(51)
-__vue_script__ = __webpack_require__(42)
-__vue_template__ = __webpack_require__(54)
+__webpack_require__(68)
+__vue_script__ = __webpack_require__(47)
+__vue_template__ = __webpack_require__(73)
+module.exports = __vue_script__ || {}
+if (module.exports.__esModule) module.exports = module.exports.default
+if (__vue_template__) { (typeof module.exports === "function" ? module.exports.options : module.exports).template = __vue_template__ }
+if (false) {(function () {  module.hot.accept()
+  var hotAPI = require("vue-hot-reload-api")
+  hotAPI.install(require("vue"), true)
+  if (!hotAPI.compatible) return
+  var id = "/Users/Kyle/Sites/vv3schools/wp-content/themes/vv3schools-theme-2017/assets/js/components/_post-list.vue"
+  if (!module.hot.data) {
+    hotAPI.createRecord(id, module.exports)
+  } else {
+    hotAPI.update(id, module.exports, __vue_template__)
+  }
+})()}
+
+/***/ }),
+/* 21 */
+/***/ (function(module, exports, __webpack_require__) {
+
+var __vue_script__, __vue_template__
+__webpack_require__(66)
+__vue_script__ = __webpack_require__(48)
+__vue_template__ = __webpack_require__(74)
+module.exports = __vue_script__ || {}
+if (module.exports.__esModule) module.exports = module.exports.default
+if (__vue_template__) { (typeof module.exports === "function" ? module.exports.options : module.exports).template = __vue_template__ }
+if (false) {(function () {  module.hot.accept()
+  var hotAPI = require("vue-hot-reload-api")
+  hotAPI.install(require("vue"), true)
+  if (!hotAPI.compatible) return
+  var id = "/Users/Kyle/Sites/vv3schools/wp-content/themes/vv3schools-theme-2017/assets/js/components/_site-footer.vue"
+  if (!module.hot.data) {
+    hotAPI.createRecord(id, module.exports)
+  } else {
+    hotAPI.update(id, module.exports, __vue_template__)
+  }
+})()}
+
+/***/ }),
+/* 22 */
+/***/ (function(module, exports, __webpack_require__) {
+
+var __vue_script__, __vue_template__
+__webpack_require__(64)
+__vue_script__ = __webpack_require__(49)
+__vue_template__ = __webpack_require__(75)
+module.exports = __vue_script__ || {}
+if (module.exports.__esModule) module.exports = module.exports.default
+if (__vue_template__) { (typeof module.exports === "function" ? module.exports.options : module.exports).template = __vue_template__ }
+if (false) {(function () {  module.hot.accept()
+  var hotAPI = require("vue-hot-reload-api")
+  hotAPI.install(require("vue"), true)
+  if (!hotAPI.compatible) return
+  var id = "/Users/Kyle/Sites/vv3schools/wp-content/themes/vv3schools-theme-2017/assets/js/components/_site-header.vue"
+  if (!module.hot.data) {
+    hotAPI.createRecord(id, module.exports)
+  } else {
+    hotAPI.update(id, module.exports, __vue_template__)
+  }
+})()}
+
+/***/ }),
+/* 23 */
+/***/ (function(module, exports, __webpack_require__) {
+
+var __vue_script__, __vue_template__
+__webpack_require__(65)
+__vue_script__ = __webpack_require__(50)
+__vue_template__ = __webpack_require__(76)
 module.exports = __vue_script__ || {}
 if (module.exports.__esModule) module.exports = module.exports.default
 if (__vue_template__) { (typeof module.exports === "function" ? module.exports.options : module.exports).template = __vue_template__ }
@@ -17945,7 +18038,7 @@ if (false) {(function () {  module.hot.accept()
 })()}
 
 /***/ }),
-/* 21 */
+/* 24 */
 /***/ (function(module, __webpack_exports__, __webpack_require__) {
 
 "use strict";
@@ -20232,10 +20325,10 @@ if (inBrowser && window.Vue) {
 
 /* harmony default export */ __webpack_exports__["default"] = (VueRouter);
 
-/* WEBPACK VAR INJECTION */}.call(__webpack_exports__, __webpack_require__(3)))
+/* WEBPACK VAR INJECTION */}.call(__webpack_exports__, __webpack_require__(5)))
 
 /***/ }),
-/* 22 */
+/* 25 */
 /***/ (function(module, __webpack_exports__, __webpack_require__) {
 
 "use strict";
@@ -21049,16 +21142,16 @@ var index_esm = {
 
 
 /***/ }),
-/* 23 */
+/* 26 */
 /***/ (function(module, exports, __webpack_require__) {
 
 "use strict";
 
 
 var utils = __webpack_require__(0);
-var bind = __webpack_require__(9);
-var Axios = __webpack_require__(25);
-var defaults = __webpack_require__(2);
+var bind = __webpack_require__(11);
+var Axios = __webpack_require__(28);
+var defaults = __webpack_require__(4);
 
 /**
  * Create an instance of Axios
@@ -21091,15 +21184,15 @@ axios.create = function create(instanceConfig) {
 };
 
 // Expose Cancel & CancelToken
-axios.Cancel = __webpack_require__(6);
-axios.CancelToken = __webpack_require__(24);
-axios.isCancel = __webpack_require__(7);
+axios.Cancel = __webpack_require__(8);
+axios.CancelToken = __webpack_require__(27);
+axios.isCancel = __webpack_require__(9);
 
 // Expose all/spread
 axios.all = function all(promises) {
   return Promise.all(promises);
 };
-axios.spread = __webpack_require__(39);
+axios.spread = __webpack_require__(42);
 
 module.exports = axios;
 
@@ -21108,13 +21201,13 @@ module.exports.default = axios;
 
 
 /***/ }),
-/* 24 */
+/* 27 */
 /***/ (function(module, exports, __webpack_require__) {
 
 "use strict";
 
 
-var Cancel = __webpack_require__(6);
+var Cancel = __webpack_require__(8);
 
 /**
  * A `CancelToken` is an object that can be used to request cancellation of an operation.
@@ -21172,18 +21265,18 @@ module.exports = CancelToken;
 
 
 /***/ }),
-/* 25 */
+/* 28 */
 /***/ (function(module, exports, __webpack_require__) {
 
 "use strict";
 
 
-var defaults = __webpack_require__(2);
+var defaults = __webpack_require__(4);
 var utils = __webpack_require__(0);
-var InterceptorManager = __webpack_require__(26);
-var dispatchRequest = __webpack_require__(27);
-var isAbsoluteURL = __webpack_require__(35);
-var combineURLs = __webpack_require__(33);
+var InterceptorManager = __webpack_require__(29);
+var dispatchRequest = __webpack_require__(30);
+var isAbsoluteURL = __webpack_require__(38);
+var combineURLs = __webpack_require__(36);
 
 /**
  * Create a new instance of Axios
@@ -21264,7 +21357,7 @@ module.exports = Axios;
 
 
 /***/ }),
-/* 26 */
+/* 29 */
 /***/ (function(module, exports, __webpack_require__) {
 
 "use strict";
@@ -21323,16 +21416,16 @@ module.exports = InterceptorManager;
 
 
 /***/ }),
-/* 27 */
+/* 30 */
 /***/ (function(module, exports, __webpack_require__) {
 
 "use strict";
 
 
 var utils = __webpack_require__(0);
-var transformData = __webpack_require__(30);
-var isCancel = __webpack_require__(7);
-var defaults = __webpack_require__(2);
+var transformData = __webpack_require__(33);
+var isCancel = __webpack_require__(9);
+var defaults = __webpack_require__(4);
 
 /**
  * Throws a `Cancel` if cancellation has been requested.
@@ -21409,7 +21502,7 @@ module.exports = function dispatchRequest(config) {
 
 
 /***/ }),
-/* 28 */
+/* 31 */
 /***/ (function(module, exports, __webpack_require__) {
 
 "use strict";
@@ -21435,13 +21528,13 @@ module.exports = function enhanceError(error, config, code, response) {
 
 
 /***/ }),
-/* 29 */
+/* 32 */
 /***/ (function(module, exports, __webpack_require__) {
 
 "use strict";
 
 
-var createError = __webpack_require__(8);
+var createError = __webpack_require__(10);
 
 /**
  * Resolve or reject a Promise based on response status.
@@ -21467,7 +21560,7 @@ module.exports = function settle(resolve, reject, response) {
 
 
 /***/ }),
-/* 30 */
+/* 33 */
 /***/ (function(module, exports, __webpack_require__) {
 
 "use strict";
@@ -21494,7 +21587,7 @@ module.exports = function transformData(data, headers, fns) {
 
 
 /***/ }),
-/* 31 */
+/* 34 */
 /***/ (function(module, exports, __webpack_require__) {
 
 "use strict";
@@ -21537,7 +21630,7 @@ module.exports = btoa;
 
 
 /***/ }),
-/* 32 */
+/* 35 */
 /***/ (function(module, exports, __webpack_require__) {
 
 "use strict";
@@ -21612,7 +21705,7 @@ module.exports = function buildURL(url, params, paramsSerializer) {
 
 
 /***/ }),
-/* 33 */
+/* 36 */
 /***/ (function(module, exports, __webpack_require__) {
 
 "use strict";
@@ -21633,7 +21726,7 @@ module.exports = function combineURLs(baseURL, relativeURL) {
 
 
 /***/ }),
-/* 34 */
+/* 37 */
 /***/ (function(module, exports, __webpack_require__) {
 
 "use strict";
@@ -21693,7 +21786,7 @@ module.exports = (
 
 
 /***/ }),
-/* 35 */
+/* 38 */
 /***/ (function(module, exports, __webpack_require__) {
 
 "use strict";
@@ -21714,7 +21807,7 @@ module.exports = function isAbsoluteURL(url) {
 
 
 /***/ }),
-/* 36 */
+/* 39 */
 /***/ (function(module, exports, __webpack_require__) {
 
 "use strict";
@@ -21789,7 +21882,7 @@ module.exports = (
 
 
 /***/ }),
-/* 37 */
+/* 40 */
 /***/ (function(module, exports, __webpack_require__) {
 
 "use strict";
@@ -21808,7 +21901,7 @@ module.exports = function normalizeHeaderName(headers, normalizedName) {
 
 
 /***/ }),
-/* 38 */
+/* 41 */
 /***/ (function(module, exports, __webpack_require__) {
 
 "use strict";
@@ -21852,7 +21945,7 @@ module.exports = function parseHeaders(headers) {
 
 
 /***/ }),
-/* 39 */
+/* 42 */
 /***/ (function(module, exports, __webpack_require__) {
 
 "use strict";
@@ -21886,7 +21979,7 @@ module.exports = function spread(callback) {
 
 
 /***/ }),
-/* 40 */
+/* 43 */
 /***/ (function(module, exports, __webpack_require__) {
 
 "use strict";
@@ -21894,11 +21987,15 @@ module.exports = function spread(callback) {
 
 __webpack_require__(14);
 
-var _vue = __webpack_require__(4);
+var _vue = __webpack_require__(6);
 
 var _vue2 = _interopRequireDefault(_vue);
 
-var _vueRouter = __webpack_require__(21);
+var _App = __webpack_require__(17);
+
+var _App2 = _interopRequireDefault(_App);
+
+var _vueRouter = __webpack_require__(24);
 
 var _vueRouter2 = _interopRequireDefault(_vueRouter);
 
@@ -21914,20 +22011,23 @@ var _uikitIcons = __webpack_require__(15);
 
 var _uikitIcons2 = _interopRequireDefault(_uikitIcons);
 
-var _axios = __webpack_require__(1);
+var _axios = __webpack_require__(3);
 
 var _axios2 = _interopRequireDefault(_axios);
 
-var _Home = __webpack_require__(17);
+var _Home = __webpack_require__(18);
 
 var _Home2 = _interopRequireDefault(_Home);
+
+var _Welcome = __webpack_require__(19);
+
+var _Welcome2 = _interopRequireDefault(_Welcome);
 
 function _interopRequireDefault(obj) { return obj && obj.__esModule ? obj : { default: obj }; }
 
 _vue2.default.use(_vueRouter2.default);
 // Vuex
 
-// import App from './App'
 
 // Vue Router
 
@@ -21940,18 +22040,21 @@ _uikit2.default.use(_uikitIcons2.default);
 // Axios Import
 
 _vue2.default.use(_axios2.default);
-window.axios = __webpack_require__(1);
+window.axios = __webpack_require__(3);
 
 //.vue components
 
-var routes = [{ path: '/', component: _Home2.default }];
+
+var routes = [{ path: '/', name: 'welcome', component: _Welcome2.default }, { path: '/home', name: 'home', component: _Home2.default }];
 var router = new _vueRouter2.default({
+    mode: 'history',
     routes: routes // short for routes: routes
 });
 
-var siteHeader = _vue2.default.component('site-header', __webpack_require__(19));
-var siteFooter = _vue2.default.component('site-footer', __webpack_require__(18));
-var siteFooter = _vue2.default.component('site-nav', __webpack_require__(20));
+var siteHeader = _vue2.default.component('site-header', __webpack_require__(22));
+var siteFooter = _vue2.default.component('site-footer', __webpack_require__(21));
+var siteFooter = _vue2.default.component('site-nav', __webpack_require__(23));
+var postList = _vue2.default.component('post-list', __webpack_require__(20));
 
 // Initialize
 _vue2.default.config.productionTip = false;
@@ -21959,11 +22062,91 @@ _vue2.default.config.productionTip = false;
 new _vue2.default({
     el: '#app',
     router: router,
-    store: _store2.default
+    store: _store2.default,
+    template: '<App/>',
+    components: { App: _App2.default }
 });
 
 /***/ }),
-/* 41 */
+/* 44 */
+/***/ (function(module, exports, __webpack_require__) {
+
+"use strict";
+
+
+Object.defineProperty(exports, "__esModule", {
+  value: true
+});
+// <template>
+// <div id="app">
+//
+//   <div id="page" class="site">
+//     <site-nav v-if="showNav"></site-nav>
+//     <!-- <div id="main" class="site-main uk-overflow-hidden" role="main"> -->
+//       <!-- route outlet -->
+//       <!-- component matched by the route will render here -->
+//       <!-- <transition name="fade-down" mode="out-in" appear> -->
+//       <router-view></router-view>
+//       <!-- </transition> -->
+//     <!-- </div> -->
+//
+//     <site-footer v-if="showNav"></site-footer>
+//
+//
+//   </div><!-- #page .site -->
+// </div><!-- #app -->
+// </template>
+//
+// <script>
+exports.default = {
+  name: 'app',
+  // props : {
+  //   showNav : '',
+  // },
+  data: function data() {
+    return {};
+  },
+  created: function created() {
+    //   this.$store.dispatch('fetchSiteInfo');
+    //   this.$store.dispatch('fetchAllPages');
+    //   this.$store.dispatch('fetchAllPosts');
+    //   this.$store.dispatch('fetchAllCategories');
+    //   this.$store.dispatch('fetchAllTags');
+  },
+  mounted: function mounted() {
+    //   this.getShowNav();
+  },
+
+  methods: {
+    //   getShowNav(){
+    //       if(this.$route.name == 'welcome'){
+    //           this.showNav = false;
+    //       }else{
+    //           this.showNav = true;
+    //       }
+    //   }
+  },
+  computed: {
+    showNav: function showNav() {
+      if (this.$route.name == 'welcome') {
+        return this.showNavValue = false;
+      } else {
+        return this.showNavValue = true;
+      }
+    }
+  }
+};
+// </script>
+//
+// <style scoped>
+// #app {
+//
+// }
+// </style>
+//
+
+/***/ }),
+/* 45 */
 /***/ (function(module, exports, __webpack_require__) {
 
 "use strict";
@@ -21973,17 +22156,37 @@ Object.defineProperty(exports, "__esModule", {
     value: true
 });
 // <template lang="html">
-//     <div class="">
-//         <div id="bg-full" class="uk-cover-container uk-height-large">
-//             <img src="http://vmray.staging.wpengine.com/wp-content/uploads/2016/07/VMRay-Slider2-blue.jpg" alt="" uk-cover>
-//         </div>
+//     <div class="uk-container-expand">
+//         <site-header></site-header>
+//         <post-list></post-list>
+//
+//         <section id="about" class="uk-section uk-section-media uk-light uk-background-cover" style="background-image: url(https://mydesycdn.mydesy.com/wp-content/uploads/2015/07/nice-sentences-in-gongqijun-comic6.jpg)">
+//             <section class="uk-container uk-padding-large">
+//                 <div class="uk-width-1-1">
+//                     <h1>Learn About My Blog</h1>
+//                     <p>Lorem ipsum dolor sit amet, consectetur adipisicing elit. Enim unde neque magnam ipsam, assumenda delectus est minus voluptates, vitae ipsum fugiat porro ea. Repudiandae, odio dolores delectus voluptatum, maxime atque!</p>
+//                 </div>
+//             </section>
+//         </section>
+//
+//
+//         <article id="new-post" class="uk-article uk-section-primary">
+//             <section class="uk-width-1-1 uk-padding-large">
+//                 <h1 class="uk-article-title">Blog Article</h1>
+//                 <p class="uk-article-meta">Written by <a href="#">Sam</a> Today. </p>
+//                 <p>Lorem ipsum dolor sit amet, consectetur adipisicing elit. Nostrum, in odio debitis molestias hic. Magni, autem, minus. Deserunt vitae quas fugiat laboriosam reiciendis debitis beatae unde! Ducimus nobis ad voluptates. Lorem ipsum dolor sit amet, consectetur adipisicing elit. Accusamus quis eum praesentium modi nam, necessitatibus assumenda, ipsa a omnis aspernatur aliquam iusto in quam pariatur perspiciatis possimus quidem. Rem, error?Lorem ipsum dolor sit amet, consectetur adipisicing elit. Libero, laboriosam ut ex placeat! Similique aliquid quisquam excepturi magnam ab, totam doloribus dignissimos porro tempora sunt explicabo, quia quas perferendis dolorem.Lorem ipsum dolor sit amet, consectetur adipisicing elit. Repellendus reprehenderit, quasi neque amet sint cum omnis iure quos harum atque tenetur quis, esse nihil repellat consequatur, eaque est impedit dolore?</p>
+//                 <p>Lorem ipsum dolor sit amet, consectetur adipisicing elit. Nostrum, in odio debitis molestias hic. Magni, autem, minus. Deserunt vitae quas fugiat laboriosam reiciendis debitis beatae unde! Ducimus nobis ad voluptates. Lorem ipsum dolor sit amet, consectetur adipisicing elit. Accusamus quis eum praesentium modi nam, necessitatibus assumenda, ipsa a omnis aspernatur aliquam iusto in quam pariatur perspiciatis possimus quidem. Rem, error?Lorem ipsum dolor sit amet, consectetur adipisicing elit. Libero, laboriosam ut ex placeat! Similique aliquid quisquam excepturi magnam ab, totam doloribus dignissimos porro tempora sunt explicabo, quia quas perferendis dolorem.Lorem ipsum dolor sit amet, consectetur adipisicing elit. Repellendus reprehenderit, quasi neque amet sint cum omnis iure quos harum atque tenetur quis, esse nihil repellat consequatur, eaque est impedit dolore?</p>
+//             </section>
+//         </article>
 //
 //     </div>
+//
 // </template>
 //
 // <script>
 exports.default = {
-    name: 'home'
+    name: 'home',
+    props: {}
 };
 // </script>
 //
@@ -21995,7 +22198,106 @@ exports.default = {
 //
 
 /***/ }),
-/* 42 */
+/* 46 */
+/***/ (function(module, exports, __webpack_require__) {
+
+"use strict";
+
+
+Object.defineProperty(exports, "__esModule", {
+  value: true
+});
+// <template lang="html">
+//     <!-- <div class="uk-cover-container uk-height-large">
+//         <img src="http://www.wallpapers-web.com/data/out/19/3864777-artistic-wallpapers.jpg" alt="" />
+//         <div class="uk-overlay uk-light uk-position-bottom">
+//             <p>Default Lorem ipsum dolor sit amet, consectetur adipiscing elit.</p>
+//         </div>
+//     </div> -->
+//     <div id="homepage-main" class="uk-overflow-hidden">
+//         <!-- <div id="main-title" class="uk-h2 uk-margin-remove">{{title}}</div> -->
+//         <div id="main-bg" class="uk-background-cover uk-height-large uk-panel uk-flex uk-flex-center uk-flex-middle">
+//             <div id="main-title" class="uk-heading-primary uk-position-z-index" v-text="title"></div>
+//
+//             <div class="head-icon uk-width-medium-1-4 uk-width-small-1-2 uk-position-z-index">
+//                         <div class="head-icon-img-div">
+//                             <router-link :to="{ path: '/' }" class="head-icon-a">
+//                                 <div class="head-icon-img head-icon-child uk-border-circle">&nbsp;</div>
+//                             </router-link>
+//                         </div>
+//             </div>
+//             <div id="social-icon-list" class="uk-navbar-nav uk-position-z-index uk-list">
+//                   <div id="social-icon">
+//                     <a target="_blank" href="https://github.com/kylops" class="">
+//                       <span uk-icon="icon: github; ratio: 2"></span>
+//                     </a>
+//                 </div>
+//                   <div>
+//                     <a target="_blank" href="https://www.facebook.com/kyle.yangliu" class="">
+//                       <span uk-icon="icon: facebook; ratio: 2"></span>
+//                     </a>
+//                 </div>
+//                   <div>
+//                     <a target="_blank" href="https://www.instagram.com/kyle.yangliu/" class="">
+//                       <span uk-icon="icon: instagram; ratio: 2"></span>
+//                     </a>
+//                 </div>
+//
+//             </div>
+//
+//
+//             <img src="http://www.vv3schools.com/wp-content/uploads/2017/04/3864777-artistic-wallpapers.jpg" alt="wallpaper" uk-scrollspy="cls: uk-animation-kenburns; repeat: true">
+//
+//         </div>
+//
+//     </div>
+// </template>
+//
+// <script>
+exports.default = {
+  name: 'welcome',
+  props: {},
+  data: function data() {
+    return {
+      title: 'CATS RULE!'
+    };
+  },
+  mounted: function mounted() {},
+
+  methods: {},
+  computed: {}
+};
+// </script>
+//
+// <style lang="css">
+// #main-title{
+//     font-size: 4em;
+//     color: white;
+//     position: absolute;
+//     text-align: center;
+//     top: 20%;
+//     font-family: 'Gloria Hallelujah', cursive !important;
+// }
+// #homepage-main{
+//     height: 100vh;
+// }
+// #main-bg{
+//     positon: relative;
+//     height: 100%;
+// }
+// .head-icon-child { background-image: url('http://www.vv3schools.com/wp-content/uploads/2017/04/cooper-logo.jpeg'); }
+// #social-icon-list{
+//     position: absolute;
+//     top: 70%;
+// }
+// a{
+//     color: black;
+// }
+// </style>
+//
+
+/***/ }),
+/* 47 */
 /***/ (function(module, exports, __webpack_require__) {
 
 "use strict";
@@ -22005,15 +22307,187 @@ Object.defineProperty(exports, "__esModule", {
     value: true
 });
 // <template lang="html">
-//     <nav class="uk-navbar-container" uk-navbar>
-//     <div class="uk-navbar-left">
-//         <ul class="uk-navbar-nav">
-//             <li class="uk-active"><a href="">title1</a></li>
-//             <li class="uk-parent"><a href="">title2</a></li>
-//             <li><a href="">title3</a></li>
-//         </ul>
+//     <div class="uk-section-muted">
+//         <div uk-grid>
+//             <div class="uk-width-1-3@s">
+//                 <div class="uk-card uk-card-muted uk-card-body" uk-scrollspy="cls: uk-animation-slide-left; repeat: false">
+//                     <h1>Title</h1>
+//                     <p>Lorem ipsum dolor sit amet, consectetur adipisicing elit. Cumque reiciendis, fugit maxime. Voluptatem est molestiae dolor tenetur aut rem assumenda provident, rerum voluptas! Nemo aut incidunt esse, eligendi veritatis perferendis.</p>
+//                 </div>
+//             </div>
+//             <div class="uk-width-1-3@s">
+//                 <div class="uk-card uk-card-muted uk-card-body" uk-scrollspy="cls: uk-animation-slide-left; repeat: false">
+//                     <h1>Title</h1>
+//                     <p>Lorem ipsum dolor sit amet, consectetur adipisicing elit. Cumque reiciendis, fugit maxime. Voluptatem est molestiae dolor tenetur aut rem assumenda provident, rerum voluptas! Nemo aut incidunt esse, eligendi veritatis perferendis.</p>
+//                 </div>
+//             </div>
+//             <div class="uk-width-1-3@s">
+//                 <div class="uk-card uk-card-muted uk-card-body" uk-scrollspy="cls: uk-animation-slide-left; repeat: false">
+//                     <h1>Title</h1>
+//                     <p>Lorem ipsum dolor sit amet, consectetur adipisicing elit. Cumque reiciendis, fugit maxime. Voluptatem est molestiae dolor tenetur aut rem assumenda provident, rerum voluptas! Nemo aut incidunt esse, eligendi veritatis perferendis.</p>
+//                 </div>
+//             </div>
+//         </div>
 //     </div>
-// </nav>
+// </template>
+//
+// <script>
+exports.default = {
+    name: 'post-list'
+};
+// </script>
+//
+// <style lang="css">
+// </style>
+//
+
+/***/ }),
+/* 48 */
+/***/ (function(module, exports, __webpack_require__) {
+
+"use strict";
+
+
+Object.defineProperty(exports, "__esModule", {
+    value: true
+});
+// <template lang="html">
+//     <div id="social-footer" class="uk-section-secondary uk-padding-remove">
+//     <div class="uk-navbar-center">
+//     <ul id="social-footer-icon-list" class="uk-navbar-nav">
+//       <li>
+//         <a href="#">
+//           <span uk-icon="icon: github; ratio: 2"></span>
+//         </a>
+//       </li>
+//       <li>
+//         <a href="#">
+//           <span uk-icon="icon: facebook; ratio: 2"></span>
+//         </a>
+//       </li>
+//       <li>
+//         <a href="#">
+//           <span uk-icon="icon: twitter; ratio: 2"></span>
+//         </a>
+//       </li>
+//       <li>
+//         <a href="#">
+//           <span uk-icon="icon: instagram; ratio: 2"></span>
+//         </a>
+//       </li>
+//       <li>
+//         <a href="#">
+//           <span uk-icon="icon: google; ratio: 2"></span>
+//         </a>
+//       </li>
+//     </ul>
+//   </div>
+//   </div>
+// </template>
+//
+// <script>
+exports.default = {
+    name: 'site-footer'
+};
+// </script>
+//
+// <style lang="css">
+// #social-footer-icon-list{
+//     margin: 0 auto;
+// }
+// </style>
+//
+
+/***/ }),
+/* 49 */
+/***/ (function(module, exports, __webpack_require__) {
+
+"use strict";
+
+
+Object.defineProperty(exports, "__esModule", {
+  value: true
+});
+// <template lang="html">
+//     <!-- <div class="uk-cover-container uk-height-large">
+//         <img src="http://www.wallpapers-web.com/data/out/19/3864777-artistic-wallpapers.jpg" alt="" />
+//         <div class="uk-overlay uk-light uk-position-bottom">
+//             <p>Default Lorem ipsum dolor sit amet, consectetur adipiscing elit.</p>
+//         </div>
+//     </div> -->
+//     <div class="uk-section uk-background-cover uk-height-large uk-panel uk-flex uk-flex-center uk-flex-middle uk-overflow-hidden">
+//         <img src="http://vv3schools.dev/wp-content/uploads/2017/04/3864777-artistic-wallpapers.jpg" alt="Example image" uk-scrollspy="cls: uk-animation-kenburns; repeat: true">
+//
+//         <p class="title uk-h4 uk-position-z-index">{{title}}</p>
+//     </div>
+// </template>
+//
+// <script>
+exports.default = {
+  name: 'site-header',
+  props: {},
+  data: function data() {
+    return {
+      title: 'This is the Homepage title'
+    };
+  },
+  mounted: function mounted() {},
+
+  methods: {},
+  computed: {}
+};
+// </script>
+//
+// <style lang="css">
+// </style>
+//
+
+/***/ }),
+/* 50 */
+/***/ (function(module, exports, __webpack_require__) {
+
+"use strict";
+
+
+Object.defineProperty(exports, "__esModule", {
+    value: true
+});
+// <template lang="html">
+//     <nav class="uk-navbar-container uk-navbar" uk-navbar uk-sticky>
+//       <div class="uk-navbar-left uk-visible@s">
+//         <ul class="uk-navbar-nav">
+//           <li>
+//             <a href="#">
+//               <span uk-icon="icon: nut; ratio: 3"></span>
+//             </a>
+//           </li>
+//         </ul>
+//       </div>
+//
+//       <div class="uk-navbar-right">
+//         <ul class="uk-navbar-nav">
+//            <li class="active"><a href="#">Home</a></li>
+//            <li><a href="#">About</a>
+//              <div uk-dropdown>
+//                <ul class="uk-nav uk-navbar-dropdown-nav">
+//                  <li><a href="#">Contact</a></li>
+//                  <li><a href="#">Call</a></li>
+//                  <li><a href="#">Location</a></li>
+//                </ul>
+//              </div>
+//            </li>
+//            <li><a href="#">Blog</a></li>
+//            <li><a href="#">
+//            <div>
+//               <form class="uk-search uk-search-default">
+//                 <span uk-search-icon></span>
+//                 <input class="uk-search-input" type="search" placeholder="Search...">
+//               </form>
+//            </div>
+//            </a></li>
+//         </ul>
+//       </div>
+//     </nav>
 // </template>
 //
 // <script>
@@ -22030,7 +22504,7 @@ exports.default = {
 //
 
 /***/ }),
-/* 43 */
+/* 51 */
 /***/ (function(module, exports, __webpack_require__) {
 
 "use strict";
@@ -22151,7 +22625,7 @@ function fromByteArray (uint8) {
 
 
 /***/ }),
-/* 44 */
+/* 52 */
 /***/ (function(module, exports, __webpack_require__) {
 
 "use strict";
@@ -22165,9 +22639,9 @@ function fromByteArray (uint8) {
 
 
 
-var base64 = __webpack_require__(43)
-var ieee754 = __webpack_require__(47)
-var isArray = __webpack_require__(48)
+var base64 = __webpack_require__(51)
+var ieee754 = __webpack_require__(60)
+var isArray = __webpack_require__(61)
 
 exports.Buffer = Buffer
 exports.SlowBuffer = SlowBuffer
@@ -23948,10 +24422,24 @@ function isnan (val) {
 /* WEBPACK VAR INJECTION */}.call(exports, __webpack_require__(12)))
 
 /***/ }),
-/* 45 */
+/* 53 */
 /***/ (function(module, exports, __webpack_require__) {
 
-exports = module.exports = __webpack_require__(10)(undefined);
+exports = module.exports = __webpack_require__(1)(undefined);
+// imports
+
+
+// module
+exports.push([module.i, "\n", ""]);
+
+// exports
+
+
+/***/ }),
+/* 54 */
+/***/ (function(module, exports, __webpack_require__) {
+
+exports = module.exports = __webpack_require__(1)(undefined);
 // imports
 
 
@@ -23962,10 +24450,52 @@ exports.push([module.i, "\nnav{\n    position:fixed;\n}\n", ""]);
 
 
 /***/ }),
-/* 46 */
+/* 55 */
 /***/ (function(module, exports, __webpack_require__) {
 
-exports = module.exports = __webpack_require__(10)(undefined);
+exports = module.exports = __webpack_require__(1)(undefined);
+// imports
+
+
+// module
+exports.push([module.i, "\n#social-footer-icon-list{\n    margin: 0 auto;\n}\n", ""]);
+
+// exports
+
+
+/***/ }),
+/* 56 */
+/***/ (function(module, exports, __webpack_require__) {
+
+exports = module.exports = __webpack_require__(1)(undefined);
+// imports
+
+
+// module
+exports.push([module.i, "\n#main-title{\n    font-size: 4em;\n    color: white;\n    position: absolute;\n    text-align: center;\n    top: 20%;\n    font-family: 'Gloria Hallelujah', cursive !important;\n}\n#homepage-main{\n    height: 100vh;\n}\n#main-bg{\n    positon: relative;\n    height: 100%;\n}\n.head-icon-child { background-image: url('http://www.vv3schools.com/wp-content/uploads/2017/04/cooper-logo.jpeg'); }\n#social-icon-list{\n    position: absolute;\n    top: 70%;\n}\na{\n    color: black;\n}\n", ""]);
+
+// exports
+
+
+/***/ }),
+/* 57 */
+/***/ (function(module, exports, __webpack_require__) {
+
+exports = module.exports = __webpack_require__(1)(undefined);
+// imports
+
+
+// module
+exports.push([module.i, "\n", ""]);
+
+// exports
+
+
+/***/ }),
+/* 58 */
+/***/ (function(module, exports, __webpack_require__) {
+
+exports = module.exports = __webpack_require__(1)(undefined);
 // imports
 
 
@@ -23976,7 +24506,21 @@ exports.push([module.i, "\n    #bg-full{\n        height: 100vh;\n    }\n", ""])
 
 
 /***/ }),
-/* 47 */
+/* 59 */
+/***/ (function(module, exports, __webpack_require__) {
+
+exports = module.exports = __webpack_require__(1)(undefined);
+// imports
+
+
+// module
+exports.push([module.i, "\n#app[_v-aad027b4] {\n\n}\n", ""]);
+
+// exports
+
+
+/***/ }),
+/* 60 */
 /***/ (function(module, exports) {
 
 exports.read = function (buffer, offset, isLE, mLen, nBytes) {
@@ -24066,7 +24610,7 @@ exports.write = function (buffer, value, offset, isLE, mLen, nBytes) {
 
 
 /***/ }),
-/* 48 */
+/* 61 */
 /***/ (function(module, exports) {
 
 var toString = {}.toString;
@@ -24077,7 +24621,7 @@ module.exports = Array.isArray || function (arr) {
 
 
 /***/ }),
-/* 49 */
+/* 62 */
 /***/ (function(module, exports, __webpack_require__) {
 
 var __WEBPACK_AMD_DEFINE_ARRAY__, __WEBPACK_AMD_DEFINE_RESULT__;/*!
@@ -34337,7 +34881,7 @@ return jQuery;
 
 
 /***/ }),
-/* 50 */
+/* 63 */
 /***/ (function(module, exports) {
 
 
@@ -34432,16 +34976,42 @@ module.exports = function (css) {
 
 
 /***/ }),
-/* 51 */
+/* 64 */
 /***/ (function(module, exports, __webpack_require__) {
 
 // style-loader: Adds some css to the DOM by adding a <style> tag
 
 // load the styles
-var content = __webpack_require__(45);
+var content = __webpack_require__(53);
 if(typeof content === 'string') content = [[module.i, content, '']];
 // add the styles to the DOM
-var update = __webpack_require__(11)(content, {});
+var update = __webpack_require__(2)(content, {});
+if(content.locals) module.exports = content.locals;
+// Hot Module Replacement
+if(false) {
+	// When the styles change, update the <style> tags
+	if(!content.locals) {
+		module.hot.accept("!!../../../node_modules/css-loader/index.js!../../../node_modules/vue-loader/lib/style-rewriter.js?id=_v-131ae7dc&file=_site-header.vue!../../../node_modules/vue-loader/lib/selector.js?type=style&index=0!./_site-header.vue", function() {
+			var newContent = require("!!../../../node_modules/css-loader/index.js!../../../node_modules/vue-loader/lib/style-rewriter.js?id=_v-131ae7dc&file=_site-header.vue!../../../node_modules/vue-loader/lib/selector.js?type=style&index=0!./_site-header.vue");
+			if(typeof newContent === 'string') newContent = [[module.id, newContent, '']];
+			update(newContent);
+		});
+	}
+	// When the module is disposed, remove the <style> tags
+	module.hot.dispose(function() { update(); });
+}
+
+/***/ }),
+/* 65 */
+/***/ (function(module, exports, __webpack_require__) {
+
+// style-loader: Adds some css to the DOM by adding a <style> tag
+
+// load the styles
+var content = __webpack_require__(54);
+if(typeof content === 'string') content = [[module.i, content, '']];
+// add the styles to the DOM
+var update = __webpack_require__(2)(content, {});
 if(content.locals) module.exports = content.locals;
 // Hot Module Replacement
 if(false) {
@@ -34458,16 +35028,94 @@ if(false) {
 }
 
 /***/ }),
-/* 52 */
+/* 66 */
 /***/ (function(module, exports, __webpack_require__) {
 
 // style-loader: Adds some css to the DOM by adding a <style> tag
 
 // load the styles
-var content = __webpack_require__(46);
+var content = __webpack_require__(55);
 if(typeof content === 'string') content = [[module.i, content, '']];
 // add the styles to the DOM
-var update = __webpack_require__(11)(content, {});
+var update = __webpack_require__(2)(content, {});
+if(content.locals) module.exports = content.locals;
+// Hot Module Replacement
+if(false) {
+	// When the styles change, update the <style> tags
+	if(!content.locals) {
+		module.hot.accept("!!../../../node_modules/css-loader/index.js!../../../node_modules/vue-loader/lib/style-rewriter.js?id=_v-557fafc0&file=_site-footer.vue!../../../node_modules/vue-loader/lib/selector.js?type=style&index=0!./_site-footer.vue", function() {
+			var newContent = require("!!../../../node_modules/css-loader/index.js!../../../node_modules/vue-loader/lib/style-rewriter.js?id=_v-557fafc0&file=_site-footer.vue!../../../node_modules/vue-loader/lib/selector.js?type=style&index=0!./_site-footer.vue");
+			if(typeof newContent === 'string') newContent = [[module.id, newContent, '']];
+			update(newContent);
+		});
+	}
+	// When the module is disposed, remove the <style> tags
+	module.hot.dispose(function() { update(); });
+}
+
+/***/ }),
+/* 67 */
+/***/ (function(module, exports, __webpack_require__) {
+
+// style-loader: Adds some css to the DOM by adding a <style> tag
+
+// load the styles
+var content = __webpack_require__(56);
+if(typeof content === 'string') content = [[module.i, content, '']];
+// add the styles to the DOM
+var update = __webpack_require__(2)(content, {});
+if(content.locals) module.exports = content.locals;
+// Hot Module Replacement
+if(false) {
+	// When the styles change, update the <style> tags
+	if(!content.locals) {
+		module.hot.accept("!!../../../node_modules/css-loader/index.js!../../../node_modules/vue-loader/lib/style-rewriter.js?id=_v-5aa887b4&file=Welcome.vue!../../../node_modules/vue-loader/lib/selector.js?type=style&index=0!./Welcome.vue", function() {
+			var newContent = require("!!../../../node_modules/css-loader/index.js!../../../node_modules/vue-loader/lib/style-rewriter.js?id=_v-5aa887b4&file=Welcome.vue!../../../node_modules/vue-loader/lib/selector.js?type=style&index=0!./Welcome.vue");
+			if(typeof newContent === 'string') newContent = [[module.id, newContent, '']];
+			update(newContent);
+		});
+	}
+	// When the module is disposed, remove the <style> tags
+	module.hot.dispose(function() { update(); });
+}
+
+/***/ }),
+/* 68 */
+/***/ (function(module, exports, __webpack_require__) {
+
+// style-loader: Adds some css to the DOM by adding a <style> tag
+
+// load the styles
+var content = __webpack_require__(57);
+if(typeof content === 'string') content = [[module.i, content, '']];
+// add the styles to the DOM
+var update = __webpack_require__(2)(content, {});
+if(content.locals) module.exports = content.locals;
+// Hot Module Replacement
+if(false) {
+	// When the styles change, update the <style> tags
+	if(!content.locals) {
+		module.hot.accept("!!../../../node_modules/css-loader/index.js!../../../node_modules/vue-loader/lib/style-rewriter.js?id=_v-6d3f1baa&file=_post-list.vue!../../../node_modules/vue-loader/lib/selector.js?type=style&index=0!./_post-list.vue", function() {
+			var newContent = require("!!../../../node_modules/css-loader/index.js!../../../node_modules/vue-loader/lib/style-rewriter.js?id=_v-6d3f1baa&file=_post-list.vue!../../../node_modules/vue-loader/lib/selector.js?type=style&index=0!./_post-list.vue");
+			if(typeof newContent === 'string') newContent = [[module.id, newContent, '']];
+			update(newContent);
+		});
+	}
+	// When the module is disposed, remove the <style> tags
+	module.hot.dispose(function() { update(); });
+}
+
+/***/ }),
+/* 69 */
+/***/ (function(module, exports, __webpack_require__) {
+
+// style-loader: Adds some css to the DOM by adding a <style> tag
+
+// load the styles
+var content = __webpack_require__(58);
+if(typeof content === 'string') content = [[module.i, content, '']];
+// add the styles to the DOM
+var update = __webpack_require__(2)(content, {});
 if(content.locals) module.exports = content.locals;
 // Hot Module Replacement
 if(false) {
@@ -34484,16 +35132,72 @@ if(false) {
 }
 
 /***/ }),
-/* 53 */
-/***/ (function(module, exports) {
+/* 70 */
+/***/ (function(module, exports, __webpack_require__) {
 
-module.exports = "\n    <div class=\"\">\n        <div id=\"bg-full\" class=\"uk-cover-container uk-height-large\">\n            <img src=\"http://vmray.staging.wpengine.com/wp-content/uploads/2016/07/VMRay-Slider2-blue.jpg\" alt=\"\" uk-cover>\n        </div>\n\n    </div>\n";
+// style-loader: Adds some css to the DOM by adding a <style> tag
+
+// load the styles
+var content = __webpack_require__(59);
+if(typeof content === 'string') content = [[module.i, content, '']];
+// add the styles to the DOM
+var update = __webpack_require__(2)(content, {});
+if(content.locals) module.exports = content.locals;
+// Hot Module Replacement
+if(false) {
+	// When the styles change, update the <style> tags
+	if(!content.locals) {
+		module.hot.accept("!!../../node_modules/css-loader/index.js!../../node_modules/vue-loader/lib/style-rewriter.js?id=_v-aad027b4&file=App.vue&scoped=true!../../node_modules/vue-loader/lib/selector.js?type=style&index=0!./App.vue", function() {
+			var newContent = require("!!../../node_modules/css-loader/index.js!../../node_modules/vue-loader/lib/style-rewriter.js?id=_v-aad027b4&file=App.vue&scoped=true!../../node_modules/vue-loader/lib/selector.js?type=style&index=0!./App.vue");
+			if(typeof newContent === 'string') newContent = [[module.id, newContent, '']];
+			update(newContent);
+		});
+	}
+	// When the module is disposed, remove the <style> tags
+	module.hot.dispose(function() { update(); });
+}
 
 /***/ }),
-/* 54 */
+/* 71 */
 /***/ (function(module, exports) {
 
-module.exports = "\n    <nav class=\"uk-navbar-container\" uk-navbar>\n    <div class=\"uk-navbar-left\">\n        <ul class=\"uk-navbar-nav\">\n            <li class=\"uk-active\"><a href=\"\">title1</a></li>\n            <li class=\"uk-parent\"><a href=\"\">title2</a></li>\n            <li><a href=\"\">title3</a></li>\n        </ul>\n    </div>\n</nav>\n";
+module.exports = "\n    <div class=\"uk-container-expand\">\n        <site-header></site-header>\n        <post-list></post-list>\n\n        <section id=\"about\" class=\"uk-section uk-section-media uk-light uk-background-cover\" style=\"background-image: url(https://mydesycdn.mydesy.com/wp-content/uploads/2015/07/nice-sentences-in-gongqijun-comic6.jpg)\">\n            <section class=\"uk-container uk-padding-large\">\n                <div class=\"uk-width-1-1\">\n                    <h1>Learn About My Blog</h1>\n                    <p>Lorem ipsum dolor sit amet, consectetur adipisicing elit. Enim unde neque magnam ipsam, assumenda delectus est minus voluptates, vitae ipsum fugiat porro ea. Repudiandae, odio dolores delectus voluptatum, maxime atque!</p>\n                </div>\n            </section>\n        </section>\n\n\n        <article id=\"new-post\" class=\"uk-article uk-section-primary\">\n            <section class=\"uk-width-1-1 uk-padding-large\">\n                <h1 class=\"uk-article-title\">Blog Article</h1>\n                <p class=\"uk-article-meta\">Written by <a href=\"#\">Sam</a> Today. </p>\n                <p>Lorem ipsum dolor sit amet, consectetur adipisicing elit. Nostrum, in odio debitis molestias hic. Magni, autem, minus. Deserunt vitae quas fugiat laboriosam reiciendis debitis beatae unde! Ducimus nobis ad voluptates. Lorem ipsum dolor sit amet, consectetur adipisicing elit. Accusamus quis eum praesentium modi nam, necessitatibus assumenda, ipsa a omnis aspernatur aliquam iusto in quam pariatur perspiciatis possimus quidem. Rem, error?Lorem ipsum dolor sit amet, consectetur adipisicing elit. Libero, laboriosam ut ex placeat! Similique aliquid quisquam excepturi magnam ab, totam doloribus dignissimos porro tempora sunt explicabo, quia quas perferendis dolorem.Lorem ipsum dolor sit amet, consectetur adipisicing elit. Repellendus reprehenderit, quasi neque amet sint cum omnis iure quos harum atque tenetur quis, esse nihil repellat consequatur, eaque est impedit dolore?</p>\n                <p>Lorem ipsum dolor sit amet, consectetur adipisicing elit. Nostrum, in odio debitis molestias hic. Magni, autem, minus. Deserunt vitae quas fugiat laboriosam reiciendis debitis beatae unde! Ducimus nobis ad voluptates. Lorem ipsum dolor sit amet, consectetur adipisicing elit. Accusamus quis eum praesentium modi nam, necessitatibus assumenda, ipsa a omnis aspernatur aliquam iusto in quam pariatur perspiciatis possimus quidem. Rem, error?Lorem ipsum dolor sit amet, consectetur adipisicing elit. Libero, laboriosam ut ex placeat! Similique aliquid quisquam excepturi magnam ab, totam doloribus dignissimos porro tempora sunt explicabo, quia quas perferendis dolorem.Lorem ipsum dolor sit amet, consectetur adipisicing elit. Repellendus reprehenderit, quasi neque amet sint cum omnis iure quos harum atque tenetur quis, esse nihil repellat consequatur, eaque est impedit dolore?</p>\n            </section>\n        </article>\n\n    </div>\n\n";
+
+/***/ }),
+/* 72 */
+/***/ (function(module, exports) {
+
+module.exports = "\n    <!-- <div class=\"uk-cover-container uk-height-large\">\n        <img src=\"http://www.wallpapers-web.com/data/out/19/3864777-artistic-wallpapers.jpg\" alt=\"\" />\n        <div class=\"uk-overlay uk-light uk-position-bottom\">\n            <p>Default Lorem ipsum dolor sit amet, consectetur adipiscing elit.</p>\n        </div>\n    </div> -->\n    <div id=\"homepage-main\" class=\"uk-overflow-hidden\">\n        <!-- <div id=\"main-title\" class=\"uk-h2 uk-margin-remove\">{{title}}</div> -->\n        <div id=\"main-bg\" class=\"uk-background-cover uk-height-large uk-panel uk-flex uk-flex-center uk-flex-middle\">\n            <div id=\"main-title\" class=\"uk-heading-primary uk-position-z-index\" v-text=\"title\"></div>\n\n            <div class=\"head-icon uk-width-medium-1-4 uk-width-small-1-2 uk-position-z-index\">\n                        <div class=\"head-icon-img-div\">\n                            <router-link :to=\"{ path: '/' }\" class=\"head-icon-a\">\n                                <div class=\"head-icon-img head-icon-child uk-border-circle\">&nbsp;</div>\n                            </router-link>\n                        </div>\n            </div>\n            <div id=\"social-icon-list\" class=\"uk-navbar-nav uk-position-z-index uk-list\">\n                  <div id=\"social-icon\">\n                    <a target=\"_blank\" href=\"https://github.com/kylops\" class=\"\">\n                      <span uk-icon=\"icon: github; ratio: 2\"></span>\n                    </a>\n                </div>\n                  <div>\n                    <a target=\"_blank\" href=\"https://www.facebook.com/kyle.yangliu\" class=\"\">\n                      <span uk-icon=\"icon: facebook; ratio: 2\"></span>\n                    </a>\n                </div>\n                  <div>\n                    <a target=\"_blank\" href=\"https://www.instagram.com/kyle.yangliu/\" class=\"\">\n                      <span uk-icon=\"icon: instagram; ratio: 2\"></span>\n                    </a>\n                </div>\n\n            </div>\n\n\n            <img src=\"http://www.vv3schools.com/wp-content/uploads/2017/04/3864777-artistic-wallpapers.jpg\" alt=\"wallpaper\" uk-scrollspy=\"cls: uk-animation-kenburns; repeat: true\">\n\n        </div>\n\n    </div>\n";
+
+/***/ }),
+/* 73 */
+/***/ (function(module, exports) {
+
+module.exports = "\n    <div class=\"uk-section-muted\">\n        <div uk-grid>\n            <div class=\"uk-width-1-3@s\">\n                <div class=\"uk-card uk-card-muted uk-card-body\" uk-scrollspy=\"cls: uk-animation-slide-left; repeat: false\">\n                    <h1>Title</h1>\n                    <p>Lorem ipsum dolor sit amet, consectetur adipisicing elit. Cumque reiciendis, fugit maxime. Voluptatem est molestiae dolor tenetur aut rem assumenda provident, rerum voluptas! Nemo aut incidunt esse, eligendi veritatis perferendis.</p>\n                </div>\n            </div>\n            <div class=\"uk-width-1-3@s\">\n                <div class=\"uk-card uk-card-muted uk-card-body\" uk-scrollspy=\"cls: uk-animation-slide-left; repeat: false\">\n                    <h1>Title</h1>\n                    <p>Lorem ipsum dolor sit amet, consectetur adipisicing elit. Cumque reiciendis, fugit maxime. Voluptatem est molestiae dolor tenetur aut rem assumenda provident, rerum voluptas! Nemo aut incidunt esse, eligendi veritatis perferendis.</p>\n                </div>\n            </div>\n            <div class=\"uk-width-1-3@s\">\n                <div class=\"uk-card uk-card-muted uk-card-body\" uk-scrollspy=\"cls: uk-animation-slide-left; repeat: false\">\n                    <h1>Title</h1>\n                    <p>Lorem ipsum dolor sit amet, consectetur adipisicing elit. Cumque reiciendis, fugit maxime. Voluptatem est molestiae dolor tenetur aut rem assumenda provident, rerum voluptas! Nemo aut incidunt esse, eligendi veritatis perferendis.</p>\n                </div>\n            </div>\n        </div>\n    </div>\n";
+
+/***/ }),
+/* 74 */
+/***/ (function(module, exports) {
+
+module.exports = "\n    <div id=\"social-footer\" class=\"uk-section-secondary uk-padding-remove\">\n    <div class=\"uk-navbar-center\">\n    <ul id=\"social-footer-icon-list\" class=\"uk-navbar-nav\">\n      <li>\n        <a href=\"#\">\n          <span uk-icon=\"icon: github; ratio: 2\"></span>\n        </a>\n      </li>\n      <li>\n        <a href=\"#\">\n          <span uk-icon=\"icon: facebook; ratio: 2\"></span>\n        </a>\n      </li>\n      <li>\n        <a href=\"#\">\n          <span uk-icon=\"icon: twitter; ratio: 2\"></span>\n        </a>\n      </li>\n      <li>\n        <a href=\"#\">\n          <span uk-icon=\"icon: instagram; ratio: 2\"></span>\n        </a>\n      </li>\n      <li>\n        <a href=\"#\">\n          <span uk-icon=\"icon: google; ratio: 2\"></span>\n        </a>\n      </li>\n    </ul>\n  </div>\n  </div>\n";
+
+/***/ }),
+/* 75 */
+/***/ (function(module, exports) {
+
+module.exports = "\n    <!-- <div class=\"uk-cover-container uk-height-large\">\n        <img src=\"http://www.wallpapers-web.com/data/out/19/3864777-artistic-wallpapers.jpg\" alt=\"\" />\n        <div class=\"uk-overlay uk-light uk-position-bottom\">\n            <p>Default Lorem ipsum dolor sit amet, consectetur adipiscing elit.</p>\n        </div>\n    </div> -->\n    <div class=\"uk-section uk-background-cover uk-height-large uk-panel uk-flex uk-flex-center uk-flex-middle uk-overflow-hidden\">\n        <img src=\"http://vv3schools.dev/wp-content/uploads/2017/04/3864777-artistic-wallpapers.jpg\" alt=\"Example image\" uk-scrollspy=\"cls: uk-animation-kenburns; repeat: true\">\n\n        <p class=\"title uk-h4 uk-position-z-index\">{{title}}</p>\n    </div>\n";
+
+/***/ }),
+/* 76 */
+/***/ (function(module, exports) {
+
+module.exports = "\n    <nav class=\"uk-navbar-container uk-navbar\" uk-navbar uk-sticky>\n      <div class=\"uk-navbar-left uk-visible@s\">\n        <ul class=\"uk-navbar-nav\">\n          <li>\n            <a href=\"#\">\n              <span uk-icon=\"icon: nut; ratio: 3\"></span>\n            </a>\n          </li>\n        </ul>\n      </div>\n\n      <div class=\"uk-navbar-right\">\n        <ul class=\"uk-navbar-nav\">\n           <li class=\"active\"><a href=\"#\">Home</a></li>\n           <li><a href=\"#\">About</a>\n             <div uk-dropdown>\n               <ul class=\"uk-nav uk-navbar-dropdown-nav\">\n                 <li><a href=\"#\">Contact</a></li>\n                 <li><a href=\"#\">Call</a></li>\n                 <li><a href=\"#\">Location</a></li>\n               </ul>\n             </div>\n           </li>\n           <li><a href=\"#\">Blog</a></li>\n           <li><a href=\"#\">\n           <div>\n              <form class=\"uk-search uk-search-default\">\n                <span uk-search-icon></span>\n                <input class=\"uk-search-input\" type=\"search\" placeholder=\"Search...\">\n              </form>\n           </div>\n           </a></li>\n        </ul>\n      </div>\n    </nav>\n";
+
+/***/ }),
+/* 77 */
+/***/ (function(module, exports) {
+
+module.exports = "\n<div id=\"app\" _v-aad027b4=\"\">\n\n  <div id=\"page\" class=\"site\" _v-aad027b4=\"\">\n    <site-nav v-if=\"showNav\" _v-aad027b4=\"\"></site-nav>\n    <!-- <div id=\"main\" class=\"site-main uk-overflow-hidden\" role=\"main\"> -->\n      <!-- route outlet -->\n      <!-- component matched by the route will render here -->\n      <!-- <transition name=\"fade-down\" mode=\"out-in\" appear> -->\n      <router-view _v-aad027b4=\"\"></router-view>\n      <!-- </transition> -->\n    <!-- </div> -->\n\n    <site-footer v-if=\"showNav\" _v-aad027b4=\"\"></site-footer>\n\n\n  </div><!-- #page .site -->\n</div><!-- #app -->\n";
 
 /***/ })
 /******/ ]);
