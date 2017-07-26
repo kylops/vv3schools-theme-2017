@@ -5,21 +5,27 @@ import App from './App.vue'
 // Vue Router
 import VueRouter from 'vue-router'
 Vue.use(VueRouter)
+
 // Vuex
 import store from './store.js'
-
-
-
-//import UIkit
-import UIkit from 'uikit'
-import Icons from 'uikit/dist/js/uikit-icons'
-// loads the Icon plugin
-UIkit.use(Icons)
 
 // Axios Import
 import Axios from 'axios'
 Vue.use(Axios)
 window.axios = require('axios')
+
+import iView from 'iview'
+Vue.use(iView)
+// import 'node_modules/iview/dist/styles/iview.css'
+
+import UIkit from 'uikit';
+import Icons from 'uikit/dist/js/uikit-icons';
+
+// loads the Icon plugin
+UIkit.use(Icons);
+
+// components can be called from the imported UIkit reference
+// UIkit.notification('Hello world.');
 
 //.vue components
 import Home from './components/Home.vue'
@@ -62,8 +68,7 @@ new Vue({
   router,
   store,
   template: '<App/>',
-  components: { App },
-  // render(h) {
+  components: { App },  // render(h) {
   //   return h(App, {
   //     props: {
   //       siteTitle: this.$el.attributes.siteTitle.value

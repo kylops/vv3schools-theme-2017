@@ -1,5 +1,5 @@
 <template>
-<div id="app">
+<div id="app-vue">
 
   <div id="page" class="site">
     <site-nav v-if="showNav"></site-nav>

@@ -9,11 +9,7 @@
  */
 get_header();
 ?>
-<div class="uk-container-expand">
    <div id="app">
-   </div>
 
-      <!-- <site-footer></site-footer> -->
    </div><!-- #app -->
-</div>
 <?php get_footer();

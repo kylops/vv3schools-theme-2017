@@ -10,8 +10,8 @@
  */
 if( !function_exists( "tw_theme_css" ) ) {
 	function tw_theme_css() {
-		wp_register_style( 'uikit', get_stylesheet_directory_uri().'/node_modules/uikit/dist/css/uikit.min.css',array(),null, 'all' );
-		wp_enqueue_style( 'uikit' );
+		// wp_register_style( 'uikit', get_stylesheet_directory_uri().'/node_modules/uikit/dist/css/uikit.min.css',array(),null, 'all' );
+		// wp_enqueue_style( 'uikit' );
 
 		wp_register_style( 'style',        get_stylesheet_directory_uri().'/style.css',array(),                     null, 'all' );
 		wp_enqueue_style( 'style' );
@@ -26,11 +26,11 @@ if( !function_exists( "tw_theme_css" ) ) {
 
 if( !function_exists( "tw_theme_js" ) ) {
 	function tw_theme_js() {
-		wp_register_script( 'uikit-js', get_template_directory_uri() . '/node_modules/uikit/dist/js/uikit.min.js', array('jquery'), null, true );
-	  wp_enqueue_script( 'uikit-js');
-
-	  wp_register_script( 'uikit-icons-js', get_template_directory_uri() . '/node_modules/uikit/dist/js/uikit-icons.min.js', array('uikit-js'), null, true );
-	  wp_enqueue_script( 'uikit-js');
+	// 	wp_register_script( 'uikit-js', get_template_directory_uri() . '/node_modules/uikit/dist/js/uikit.min.js', array('jquery'), null, true );
+	//   wp_enqueue_script( 'uikit-js');
+	  //
+	//   wp_register_script( 'uikit-icons-js', get_template_directory_uri() . '/node_modules/uikit/dist/js/uikit-icons.min.js', array('uikit-js'), null, true );
+	//   wp_enqueue_script( 'uikit-js');
 
     	wp_register_script( 'bundle-js', get_template_directory_uri() . '/dist/bundle.js', array(), null, true );
     	wp_enqueue_script( 'bundle-js');

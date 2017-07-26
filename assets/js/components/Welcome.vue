@@ -12,7 +12,7 @@
 
             <div class="head-icon uk-width-medium-1-4 uk-width-small-1-2 uk-position-z-index">
                         <div class="head-icon-img-div">
-                            <router-link :to="{ path: '/' }" class="head-icon-a">
+                            <router-link :to="{ path: 'home' }" class="head-icon-a">
                                 <div class="head-icon-img head-icon-child uk-border-circle">&nbsp;</div>
                             </router-link>
                         </div>
@@ -70,6 +70,8 @@ export default {
     color: white;
     position: absolute;
     text-align: center;
+    text-align: -webkit-center;
+
     top: 20%;
     font-family: 'Gloria Hallelujah', cursive !important;
 }
